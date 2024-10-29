@@ -5,15 +5,6 @@ from musicboy.context import Context
 
 class Playback(commands.Cog):
     @commands.command()
-    async def join(self, ctx: Context):
-        channel = ctx.author.voice.channel  # type: ignore
-        if channel is None:
-            return
-
-        await channel.connect()
-
-
-    @commands.command()
     async def play(self, ctx: Context, url: str):
         if ctx.voice_client is None:
             try:
@@ -30,6 +21,6 @@ class Playback(commands.Cog):
 
     @commands.command()
     async def leave(self, ctx: Context):
-        ctx.bot
+        ctx.bot.playlist.next()
         if ctx.voice_client is not None:
             await ctx.voice_client.disconnect()
