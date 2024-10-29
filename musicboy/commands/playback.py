@@ -58,7 +58,7 @@ class Playback(commands.Cog):
         )
         play_song(ctx)
 
-    @commands.command(name="add", aliases=["append", "queue"])
+    @commands.command(name="add", aliases=["append"])
     async def add_to_queue(self, ctx: Context, url: str):
         """Adds a song to the end of the queue"""
         ctx.bot.playlist.append_song(url)
@@ -94,6 +94,12 @@ class Playback(commands.Cog):
         """Shuffles the playlist"""
         ctx.bot.playlist.shuffle()
         await ctx.message.add_reaction("✅")
+
+    @commands.command(name="playlist", aliases=["list", "queue", "q"])
+    async def playlist(self, ctx: Context):
+        """Displays the playlist"""
+        msg = "\n".join(f"{idx+1}. {ctx.bot.playlist.metadata.get(url, {}).get("title") or url}" for idx, url in enumerate(ctx.bot.playlist.playlist))
+        await ctx.send(f"```{msg}```")
 
 
 async def setup(bot):
