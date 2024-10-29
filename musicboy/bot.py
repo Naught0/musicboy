@@ -1,6 +1,6 @@
 from discord.ext import commands
 
-from musicboy.playlist import Playlist
+from musicboy.playlist import Playlist, cache_next_songs
 
 
 class MusicBot(commands.Bot):
@@ -13,3 +13,5 @@ class MusicBot(commands.Bot):
     async def setup_hook(self) -> None:
         for cmd in self.enabled_extensions:
             await self.load_extension(f"musicboy.commands.{cmd}")
+
+        cache_next_songs(self.playlist)

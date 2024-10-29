@@ -1,7 +1,31 @@
+from __future__ import annotations
+
 import json
 import random
+from pathlib import Path
 
-from musicboy.sources.youtube.youtube import SongMetadata, get_metadata
+from musicboy.sources.youtube.youtube import (SongMetadata, download_audio,
+                                              get_metadata)
+
+
+def get_song_path(song: SongMetadata, base_dir: str = "musicboy/data") -> Path | None:
+    try:
+        path = next(Path(base_dir).glob(f"{song['id']}.*"))
+    except StopIteration:
+        return None
+
+    return path
+
+
+def cache_song(song: SongMetadata, path: Path):
+    return download_audio(song["url"], str(path))
+
+
+def cache_next_songs(playlist: Playlist):
+    for url in playlist.playlist[:3]:
+        if get_song_path(meta := playlist.metadata[url]) is None:
+            print("Caching song", meta["title"])
+            cache_song(meta, Path(playlist.data_dir) / meta["id"])
 
 
 class Playlist:
@@ -86,8 +110,6 @@ class Playlist:
     def append_song(self, url: str):
         self.playlist.append(url)
         self.metadata[url] = get_metadata(url)
-        __import__("pprint").pprint(self.metadata[url])
-        self.playlist.append(url)
 
         self.write_state()
         self.write_metadata()
