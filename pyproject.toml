@@ -9,6 +9,7 @@ readme = "README.md"
 python = "^3.10"
 discord-py = {extras = ["voice"], version = "^2.4.0"}
 yt-dlp = "^2024.10.22"
+python-dotenv = "^1.0.1"
 
 
 [tool.poetry.group.dev.dependencies]

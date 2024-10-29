@@ -2,16 +2,18 @@ import os
 import sys
 
 import discord
+from dotenv import load_dotenv
 
 from musicboy.bot import MusicBot
 from musicboy.playlist import Playlist
 
+load_dotenv()
 
 def initialize_bot(bot_token: str):
     with open("musicboy/data/playlist.txt") as f:
         playlist = f.read().splitlines()
 
-    intents = discord.Intents.default()
+    intents = discord.Intents.all()
     playlist = Playlist()
     bot = MusicBot(command_prefix="!!", intents=intents, playlist=playlist)
 
@@ -19,4 +21,4 @@ def initialize_bot(bot_token: str):
 
 
 if __name__ == "__main__":
-    initialize_bot(os.getenv("BOT_TOKEN", sys.argv[1]))
+    initialize_bot(os.getenv("BOT_TOKEN") or sys.argv[1])
