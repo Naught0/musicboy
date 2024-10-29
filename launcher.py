@@ -9,6 +9,7 @@ from musicboy.playlist import Playlist
 
 load_dotenv()
 
+
 def initialize_bot(bot_token: str):
     with open("musicboy/data/playlist.txt") as f:
         playlist = f.read().splitlines()
