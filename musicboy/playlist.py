@@ -1,34 +1,60 @@
+import json
 import random
-from dataclasses import dataclass
 
-
-@dataclass
-class SongMetadata:
-    title: str
-    duration: int
-    url: str
+from musicboy.sources.youtube.youtube import SongMetadata, get_metadata
 
 
 class Playlist:
     playlist: list[str]
 
-    def __init__(self, playlist: list[str] = []):
-        self.playlist = playlist
-        self.metadata = {}
-        self.discarded = []
+    def __init__(
+        self,
+        data_dir: str = "musicboy/data",
+    ):
         self.idx = 0
+        self.data_dir = data_dir
+        self.playlist_path = f"{data_dir}/playlist.txt"
+        self.metadata_path = f"{data_dir}/metadata.json"
+        self.history_path = f"{data_dir}/history.txt"
+
+        with open(self.metadata_path, "r") as meta_file:
+            self.metadata = json.load(meta_file)
+        with open(self.playlist_path, "r") as playlist_file:
+            self.playlist = playlist_file.read().splitlines()
+        with open(self.history_path, "r") as history_file:
+            self.discarded = history_file.read().splitlines()
+
+        self.find_missing_metadata()
 
     def _trim_past_songs(self, to_idx: int):
         self.discarded.extend(self.playlist[:to_idx])
         self.playlist = self.playlist[to_idx:]
         self.idx = 0
 
+    def find_missing_metadata(self):
+        for url in self.playlist:
+            if url not in self.metadata:
+                print("Finding metadata for", url)
+                self.metadata[url] = get_metadata(url)
+
+    def write_state(self):
+        with open(self.playlist_path, "w") as playlist_file, open(
+            self.history_path, "w"
+        ) as history_file:
+            playlist_file.write("\n".join(self.playlist))
+            history_file.write("\n".join(self.discarded))
+
+    def write_metadata(self):
+        with open(self.metadata_path, "w") as meta_file:
+            json.dump(self.metadata, meta_file)
+
     def shuffle(self):
         np, *rest = self.playlist
         random.shuffle(rest)
         self.playlist = [np, *rest]
+        self.write_state()
 
-    def move_song_id_to_position(self, url: str, position: int):
+    def move_song(self, url: str, position: int):
         if position > len(self.playlist) - 1:
             raise ValueError("Position out of range")
 
@@ -36,6 +62,8 @@ class Playlist:
             raise ValueError("URL not in playlist")
 
         self.playlist.insert(position, self.playlist.pop(self.playlist.index(url)))
+
+        self.write_state()
 
     @property
     def current(self) -> SongMetadata:
@@ -45,11 +73,33 @@ class Playlist:
 
         return self.metadata[url]
 
+    def prepend_song(self, url: str):
+        self.playlist.append(url)
+        self.metadata[url] = get_metadata(url)
+        self.playlist.insert(0 if len(self.playlist) == 0 else 1, url)
+
+        self.write_state()
+        self.write_metadata()
+
+        return self.current
+
+    def append_song(self, url: str):
+        self.playlist.append(url)
+        self.metadata[url] = get_metadata(url)
+        __import__("pprint").pprint(self.metadata[url])
+        self.playlist.append(url)
+
+        self.write_state()
+        self.write_metadata()
+
+        return self.current
+
     def goto(self, idx: int):
         if 0 > idx > len(self.playlist) - 1:
             raise ValueError("Index out of range")
 
         self._trim_past_songs(idx)
+        self.write_state()
 
         return self.current
 
@@ -59,6 +109,7 @@ class Playlist:
             self.playlist = list(reversed(self.discarded))
 
         self._trim_past_songs(new_idx)
+        self.write_state()
 
         return self.current
 
@@ -68,4 +119,11 @@ class Playlist:
             self.playlist.insert(0, self.discarded.pop(-1))
 
         self.idx = new_idx if new_idx >= 0 else 0
+        self.write_state()
+
         return self.current
+
+    def clear(self):
+        self.discarded = self.playlist
+        self.playlist = []
+        self.write_state()
