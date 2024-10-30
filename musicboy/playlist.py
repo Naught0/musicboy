@@ -143,14 +143,16 @@ class Playlist:
         self.playlist = [np, *rest]
 
     @write_state_after
-    def move_song(self, url: str, position: int):
-        if position > len(self.playlist) - 1:
+    def move_song(self, song_position: int, new_pos: int):
+        new_idx = self.idx + new_pos - 1
+        if 0 > new_idx > len(self.playlist) - 1:
             raise ValueError("Position out of range")
 
-        if url not in self.playlist:
-            raise ValueError("URL not in playlist")
+        song_position = self.idx + song_position - 1
+        if 0 > song_position > len(self.playlist) - 1:
+            raise ValueError("Position out of range")
 
-        self.playlist.insert(position, self.playlist.pop(self.playlist.index(url)))
+        self.playlist.insert(new_idx, self.playlist.pop(song_position))
 
     @write_state_after
     def prepend_song(self, url: str):

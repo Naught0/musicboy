@@ -219,6 +219,18 @@ class Playback(commands.Cog):
 
         await ctx.message.add_reaction("✅")
 
+    @commands.command(name="mv", aliases=["move"])
+    async def move(self, ctx: Context, song_position: int, new_position: int):
+        """Moves a song in the playlist"""
+        if new_position < 2:
+            new_position = 2
+            await ctx.reply(
+                "Position must be greater than 1. Playing song next (position 2)"
+            )
+
+        ctx.bot.playlist.move_song(song_position, new_position)
+        await ctx.message.add_reaction("✅")
+
 
 async def setup(bot):
     await bot.add_cog(Playback(bot))
