@@ -48,6 +48,10 @@ def write_state_after(func):
     return wrapper
 
 
+class PlaylistExhausted(Exception):
+    pass
+
+
 class PlaylistState(TypedDict):
     playlist: list[str]
     idx: int
@@ -66,11 +70,13 @@ class Playlist:
         playlist: list[str] = [],
         idx: int = 0,
         metadata: MutableMapping[str, SongMetadata] = {},
+        loop=False,
     ):
         self.idx = idx
         self.data_dir = data_dir
         self.playlist = playlist
         self.metadata = metadata
+        self.loop = loop
 
         self.state_path = Path(data_dir) / "state.json"
         try:
@@ -107,10 +113,28 @@ class Playlist:
             json.dump(self.state, f)
 
     @property
+    def has_next_song(self):
+        return self.idx + 1 < len(self.playlist) or self.loop
+
+    @property
+    def next_song(self):
+        if not self.has_next_song:
+            return None
+
+        return self.metadata[
+            self.playlist[self.idx + 1 if self.idx + 1 < len(self.playlist) else 0]
+        ]
+
+    @property
     def state(self) -> PlaylistState:
         return PlaylistState(
             playlist=self.playlist, idx=self.idx, metadata=self.metadata
         )
+
+    @property
+    def current(self) -> SongMetadata:
+        url = self.playlist[self.idx]
+        return self.metadata[url]
 
     @write_state_after
     def shuffle(self):
@@ -127,11 +151,6 @@ class Playlist:
             raise ValueError("URL not in playlist")
 
         self.playlist.insert(position, self.playlist.pop(self.playlist.index(url)))
-
-    @property
-    def current(self) -> SongMetadata:
-        url = self.playlist[self.idx]
-        return self.metadata[url]
 
     @write_state_after
     def prepend_song(self, url: str):
@@ -156,7 +175,10 @@ class Playlist:
     def next(self):
         new_idx = self.idx + 1
         if new_idx > len(self.playlist) - 1:
-            new_idx = 0
+            if self.loop:
+                new_idx = 0
+            else:
+                raise PlaylistExhausted("No more songs in playlist")
 
         self.idx = new_idx
         return self.current
@@ -171,5 +193,5 @@ class Playlist:
 
     @write_state_after
     def clear(self):
-        self.playlist = []
+        self.playlist = self.playlist[:1]
         self.idx = 0
