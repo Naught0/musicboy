@@ -201,6 +201,24 @@ class Playback(commands.Cog):
         ctx.bot.playlist.loop = not ctx.bot.playlist.loop
         await ctx.send(f"Looping {'on' if ctx.bot.playlist.loop else 'off'}")
 
+    @commands.command(name="clear")
+    async def clear(self, ctx: Context):
+        """Removes all but the first song from the playlist"""
+        ctx.bot.playlist.clear()
+        await ctx.message.add_reaction("✅")
+
+    @commands.command(name="rm", aliases=["remove", "del", "delete"])
+    async def remove(self, ctx: Context, index_or_url: int | str):
+        """Removes a song by position or url
+
+        If you supply a URL, only the first instance of that song is removed"""
+        if isinstance(index_or_url, int):
+            ctx.bot.playlist.remove_index(index_or_url)
+        elif isinstance(index_or_url, str):
+            ctx.bot.playlist.remove_song(index_or_url)
+
+        await ctx.message.add_reaction("✅")
+
 
 async def setup(bot):
     await bot.add_cog(Playback(bot))

@@ -195,3 +195,14 @@ class Playlist:
     def clear(self):
         self.playlist = self.playlist[:1]
         self.idx = 0
+
+    @write_state_after
+    def remove_index(self, idx: int):
+        self.playlist.pop(self.idx + idx - 1)
+
+    @write_state_after
+    def remove_song(self, url: str, all=False):
+        if all:
+            self.playlist = [u for u in self.playlist if u != url]
+        else:
+            self.playlist.remove(url)
