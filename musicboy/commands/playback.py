@@ -5,7 +5,7 @@ import discord
 from asyncer import asyncify
 from discord.ext import commands
 
-from musicboy.context import Context
+from musicboy.bot import Context
 from musicboy.playlist import (
     PlaylistExhausted,
     cache_next_songs,
@@ -20,17 +20,21 @@ def after_song_finished(ctx: Context, error=None):
     if ctx.voice_client is None or not ctx.voice_client.is_connected():
         return
 
+    playlist = ctx.playlist
+    if playlist is None:
+        return
+
     try:
-        ctx.bot.playlist.next()
+        playlist.next()
     except PlaylistExhausted:
         return
 
     asyncio.run(play_song(ctx))
-    run_in_thread(lambda: cache_next_songs(ctx.bot.playlist))
-    chan_ids = [c.channel.id for c in ctx.bot.voice_clients]
+    run_in_thread(lambda: cache_next_songs(playlist))
+    guild_ids = [guild for guild in ctx.bot.guilds]
 
     for k in ctx.bot.progress:
-        if k not in chan_ids:
+        if k not in guild_ids:
             del ctx.bot.progress[k]
 
 
@@ -42,10 +46,17 @@ async def play_song(ctx: Context):
     if ctx.voice_client is None or not ctx.voice_client.is_connected():
         return
 
-    song = ctx.bot.playlist.current
+    playlist = ctx.playlist
+    if playlist is None:
+        return
+
+    if ctx.guild is None:
+        raise ValueError("Bot must be in a guild (not DM or group DM)")
+
+    song = playlist.current
     path = get_song_path(song["id"])
     if path is None:
-        await asyncify(cache_song)(song, Path(ctx.bot.playlist.data_dir) / song["id"])
+        await asyncify(cache_song)(song, Path(playlist.data_dir) / song["id"])
         path = get_song_path(song["id"])
 
     if path is None:
@@ -61,8 +72,8 @@ async def play_song(ctx: Context):
             signal_type="music",
         )
 
-    channel_id = ctx.voice_client.channel.id
-    ctx.bot.progress[channel_id] = ProgressTracker.start()
+    guild_id = ctx.guild.id
+    ctx.bot.progress[guild_id] = ProgressTracker.start()
 
 
 class Playback(commands.Cog):
@@ -73,8 +84,11 @@ class Playback(commands.Cog):
             if ctx.voice_client.is_paused():
                 return ctx.voice_client.resume()
 
+        if ctx.playlist is None:
+            return
+
         if url_or_urls is None:
-            if len(ctx.bot.playlist.playlist) == 0:
+            if len(ctx.playlist.playlist) == 0:
                 await ctx.message.add_reaction("❌")
                 return
 
@@ -88,21 +102,24 @@ class Playback(commands.Cog):
             return await play_song(ctx)
 
         for url in url_or_urls.split():
-            ctx.bot.playlist.prepend_song(url)
+            ctx.playlist.prepend_song(url)
 
         if ctx.voice_client.is_playing():
             return
 
         cache_song(
-            ctx.bot.playlist.current,
-            Path(ctx.bot.playlist.data_dir) / ctx.bot.playlist.current["id"],
+            ctx.playlist.current,
+            Path(ctx.playlist.data_dir) / ctx.playlist.current["id"],
         )
         await play_song(ctx)
 
     @commands.command(name="add", aliases=["append"])
     async def add_to_queue(self, ctx: Context, url: str):
         """Adds a song to the end of the queue"""
-        ctx.bot.playlist.append_song(url)
+        if ctx.playlist is None:
+            return
+
+        ctx.playlist.append_song(url)
 
     @commands.command(name="stop", aliases=["leave", "end", "quit"])
     async def stop(self, ctx: Context):
@@ -113,8 +130,12 @@ class Playback(commands.Cog):
     @commands.command(name="next", aliases=["skip"])
     async def next_song(self, ctx: Context):
         """Skips to the next song in queue"""
+        playlist = ctx.playlist
+        if playlist is None:
+            return
+
         try:
-            ctx.bot.playlist.next()
+            playlist.next()
         except PlaylistExhausted:
             if ctx.voice_client:
                 ctx.voice_client.stop()
@@ -123,13 +144,18 @@ class Playback(commands.Cog):
         if ctx.voice_client and ctx.voice_client.is_connected():
             await play_song(ctx)
 
-        run_in_thread(lambda: cache_next_songs(ctx.bot.playlist))
+        run_in_thread(lambda: cache_next_songs(playlist))
+
         await ctx.message.add_reaction("✅")
 
     @commands.command(name="prev", aliases=["previous", "back"])
     async def previous(self, ctx: Context):
         """Skips to the previous song in queue"""
-        ctx.bot.playlist.prev()
+        playlist = ctx.playlist
+        if playlist is None:
+            return
+
+        playlist.prev()
 
         if ctx.voice_client and ctx.voice_client.is_connected():
             await play_song(ctx)
@@ -145,14 +171,16 @@ class Playback(commands.Cog):
     @commands.command(name="shuffle")
     async def shuffle(self, ctx: Context):
         """Shuffles the playlist"""
-        ctx.bot.playlist.shuffle()
+        if pl := ctx.playlist:
+            pl.shuffle()
+
         await ctx.message.add_reaction("✅")
 
     @commands.command(name="queue", aliases=["q", "list", "playlist"])
     async def playlist(self, ctx: Context):
         """Displays the playlist"""
-        playlist = ctx.bot.playlist
-        if len(playlist.playlist) == 0:
+        playlist = ctx.playlist
+        if playlist is None or len(playlist.playlist) == 0:
             return await ctx.message.add_reaction("❌")
 
         em = discord.Embed(color=discord.Color(0x000000))
@@ -182,20 +210,27 @@ class Playback(commands.Cog):
         if ctx.voice_client is None or not ctx.voice_client.is_playing():
             return
 
-        current = ctx.bot.playlist.current
+        if (
+            ctx.guild is None
+            or (playlist := ctx.playlist) is None
+            or ctx.progress is None
+        ):
+            return
+
+        current = playlist.current
         em = discord.Embed(color=discord.Color(0x000000))
         em.title = current["title"]
         em.url = current["url"]
-        progress = ctx.bot.progress[ctx.voice_client.channel.id]
+        progress = ctx.progress
         em.add_field(
             name="Progress",
             value=f"`{progress.elapsed} / {seconds_to_duration(current['duration'])} ({int(100 * progress.elapsed_seconds / current['duration'])}%)`",
         )
 
-        if ctx.bot.playlist.next_song:
+        if playlist.next_song:
             em.add_field(
                 name="Next up",
-                value=f"[{ctx.bot.playlist.next_song['title']}]({ctx.bot.playlist.next_song['url']}) ({seconds_to_duration(ctx.bot.playlist.next_song['duration'])})",
+                value=f"[{playlist.next_song['title']}]({playlist.next_song['url']}) ({seconds_to_duration(playlist.next_song['duration'])})",
                 inline=False,
             )
 
@@ -204,13 +239,19 @@ class Playback(commands.Cog):
     @commands.command(name="loop")
     async def loop(self, ctx: Context):
         """Toggle whether the playlist should loop after the final song"""
-        ctx.bot.playlist.loop = not ctx.bot.playlist.loop
-        await ctx.send(f"Looping {'on' if ctx.bot.playlist.loop else 'off'}")
+        if ctx.playlist is None:
+            return
+
+        ctx.playlist.loop = not ctx.playlist.loop
+        await ctx.send(f"Looping {'on' if ctx.playlist.loop else 'off'}")
 
     @commands.command(name="clear")
     async def clear(self, ctx: Context):
         """Removes all but the first song from the playlist"""
-        ctx.bot.playlist.clear()
+        if ctx.playlist is None:
+            return
+
+        ctx.playlist.clear()
         await ctx.message.add_reaction("✅")
 
     @commands.command(name="rm", aliases=["remove", "del", "delete"])
@@ -218,23 +259,29 @@ class Playback(commands.Cog):
         """Removes a song by position or url
 
         If you supply a URL, only the first instance of that song is removed"""
+        if ctx.playlist is None:
+            return
+
         if isinstance(index_or_url, int):
-            ctx.bot.playlist.remove_index(index_or_url)
+            ctx.playlist.remove_index(index_or_url)
         elif isinstance(index_or_url, str):
-            ctx.bot.playlist.remove_song(index_or_url)
+            ctx.playlist.remove_song(index_or_url)
 
         await ctx.message.add_reaction("✅")
 
     @commands.command(name="mv", aliases=["move"])
     async def move(self, ctx: Context, song_position: int, new_position: int):
         """Moves a song in the playlist"""
+        if ctx.playlist is None:
+            return
+
         if new_position < 2:
             new_position = 2
             await ctx.reply(
                 "Position must be greater than 1. Playing song next (position 2)"
             )
 
-        ctx.bot.playlist.move_song(song_position, new_position)
+        ctx.playlist.move_song(song_position, new_position)
         await ctx.message.add_reaction("✅")
 
 

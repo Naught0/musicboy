@@ -5,7 +5,6 @@ import random
 from collections.abc import MutableMapping
 from functools import wraps
 from pathlib import Path
-from traceback import print_exc
 from typing import TypedDict
 
 from musicboy.sources.youtube.youtube import SongMetadata, download_audio, get_metadata
@@ -52,7 +51,7 @@ class PlaylistExhausted(Exception):
 
 
 class PlaylistState(TypedDict):
-    channel_id: int
+    guild_id: int
     playlist: list[str]
     idx: int
     metadata: MutableMapping[str, SongMetadata]
@@ -66,7 +65,7 @@ class Playlist:
 
     def __init__(
         self,
-        channel_id: int,
+        guild_id: int,
         data_dir: str = "musicboy/data",
         playlist: list[str] = [],
         idx: int = 0,
@@ -78,12 +77,12 @@ class Playlist:
         self.playlist = playlist
         self.metadata = metadata
         self.loop = loop
-        self.channel_id = channel_id
+        self.guild_id = guild_id
 
-        self.state_path = Path(data_dir) / f"state_{channel_id}.json"
+        self.state_path = Path(data_dir) / f"state_{guild_id}.json"
         try:
             with self.state_path.open() as f:
-                Playlist.from_state(json.load(f))
+                self._load_state(json.load(f))
         except FileNotFoundError:
             with open(self.state_path, "w") as f:
                 json.dump(self.state, f)
@@ -100,10 +99,16 @@ class Playlist:
                 print("Finding metadata for", url)
                 self.metadata[url] = get_metadata(url)
 
+    def _load_state(self, state: PlaylistState):
+        self.playlist = state["playlist"]
+        self.idx = state["idx"]
+        self.metadata = state["metadata"]
+        self.guild_id = state["guild_id"]
+
     @classmethod
     def from_state(cls: type[Playlist], state: PlaylistState):
         self = cls(
-            state["channel_id"],
+            state["guild_id"],
             playlist=state["playlist"],
             idx=state["idx"],
             metadata=state["metadata"],
@@ -134,7 +139,7 @@ class Playlist:
             playlist=self.playlist,
             idx=self.idx,
             metadata=self.metadata,
-            channel_id=self.channel_id,
+            guild_id=self.guild_id,
         )
 
     @property
