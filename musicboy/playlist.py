@@ -165,8 +165,6 @@ class Playlist:
     def prev(self):
         new_idx = self.idx - 1
         new_idx = new_idx if new_idx >= 0 else len(self.playlist) - 1
-        print("NEW IDX", new_idx)
-
         self.idx = new_idx
 
         return self.current
