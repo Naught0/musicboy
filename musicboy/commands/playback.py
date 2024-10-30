@@ -1,6 +1,8 @@
+import asyncio
 from pathlib import Path
 
 import discord
+from asyncer import asyncify
 from discord.ext import commands
 
 from musicboy.context import Context
@@ -23,7 +25,7 @@ def after_song_finished(ctx: Context, error=None):
     except PlaylistExhausted:
         return
 
-    play_song(ctx)
+    asyncio.run(play_song(ctx))
     run_in_thread(lambda: cache_next_songs(ctx.bot.playlist))
     chan_ids = [c.channel.id for c in ctx.bot.voice_clients]
 
@@ -36,14 +38,18 @@ def get_song_source(song_id: str):
     return discord.FFmpegPCMAudio(str(get_song_path(song_id)))
 
 
-def play_song(ctx: Context):
+async def play_song(ctx: Context):
     if ctx.voice_client is None or not ctx.voice_client.is_connected():
         return
 
     song = ctx.bot.playlist.current
     path = get_song_path(song["id"])
     if path is None:
-        raise ValueError(f"Can't play song. Could not find audio for: {song['title']}")
+        await asyncify(cache_song)(song, Path(ctx.bot.playlist.data_dir) / song["id"])
+        path = get_song_path(song["id"])
+
+    if path is None:
+        raise ValueError("Can't play song. Audio not downloaded")
 
     if ctx.voice_client.is_playing():
         ctx.voice_client.source = get_song_source(song["id"])
@@ -56,7 +62,7 @@ def play_song(ctx: Context):
         )
 
     channel_id = ctx.voice_client.channel.id
-    ctx.bot.progress[channel_id] = ProgressTracker()
+    ctx.bot.progress[channel_id] = ProgressTracker.start()
 
 
 class Playback(commands.Cog):
@@ -79,7 +85,7 @@ class Playback(commands.Cog):
                 return await ctx.message.add_reaction("❌")
 
         if url_or_urls is None:
-            return play_song(ctx)
+            return await play_song(ctx)
 
         for url in url_or_urls.split():
             ctx.bot.playlist.prepend_song(url)
@@ -91,7 +97,7 @@ class Playback(commands.Cog):
             ctx.bot.playlist.current,
             Path(ctx.bot.playlist.data_dir) / ctx.bot.playlist.current["id"],
         )
-        play_song(ctx)
+        await play_song(ctx)
 
     @commands.command(name="add", aliases=["append"])
     async def add_to_queue(self, ctx: Context, url: str):
@@ -115,7 +121,7 @@ class Playback(commands.Cog):
                 await ctx.voice_client.disconnect(force=True)
 
         if ctx.voice_client and ctx.voice_client.is_connected():
-            play_song(ctx)
+            await play_song(ctx)
 
         run_in_thread(lambda: cache_next_songs(ctx.bot.playlist))
         await ctx.message.add_reaction("✅")
@@ -126,7 +132,7 @@ class Playback(commands.Cog):
         ctx.bot.playlist.prev()
 
         if ctx.voice_client and ctx.voice_client.is_connected():
-            play_song(ctx)
+            await play_song(ctx)
 
         await ctx.message.add_reaction("✅")
 
