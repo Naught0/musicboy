@@ -26,10 +26,9 @@ def cache_song(song: SongMetadata, path: Path):
 
 
 def cache_next_songs(playlist: Playlist):
-    for url in playlist.playlist[:3]:
+    for url in playlist.playlist[playlist.idx + 1 : playlist.idx + 4]:
         meta = playlist.metadata[url]
         if get_song_path(meta["id"]) is None:
-            print("Caching song", meta["title"])
             run_in_thread(
                 lambda: download_audio(
                     meta["url"], str(Path(playlist.data_dir) / meta["id"])
