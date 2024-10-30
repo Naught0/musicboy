@@ -39,7 +39,10 @@ def after_song_finished(ctx: Context, error=None):
 
 
 def get_song_source(song_id: str):
-    return discord.FFmpegPCMAudio(str(get_song_path(song_id)))
+    return make_source(str(get_song_path(song_id)))
+
+def make_source(path: str, volume: float = 0.05):
+    return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(path), volume=volume)
 
 
 async def play_song(ctx: Context):
@@ -64,16 +67,19 @@ async def play_song(ctx: Context):
 
     if ctx.voice_client.is_playing():
         ctx.voice_client.source = get_song_source(song["id"])
+        ctx.voice_client.source.volume = ctx.playlist.volume
     else:
         ctx.voice_client.play(
-            discord.FFmpegPCMAudio(str(path)),
+            make_source(str(path), ctx.playlist.volume),
             after=lambda error: after_song_finished(ctx, error),
             bitrate=256,
             signal_type="music",
         )
 
     guild_id = ctx.guild.id
-    ctx.bot.progress[guild_id] = ProgressTracker.start()
+    progress = ProgressTracker()
+    progress.start()
+    ctx.bot.progress[guild_id] = progress
 
 
 class Playback(commands.Cog):
@@ -82,6 +88,7 @@ class Playback(commands.Cog):
         """Play, resume, or queue a song next"""
         if ctx.voice_client is not None:
             if ctx.voice_client.is_paused():
+                ctx.progress.start()
                 return ctx.voice_client.resume()
 
         if ctx.playlist is None:
@@ -166,6 +173,7 @@ class Playback(commands.Cog):
     async def pause(self, ctx: Context):
         """Pauses playback"""
         if ctx.voice_client and ctx.voice_client.is_playing():
+            ctx.progress.stop()
             ctx.voice_client.pause()
 
     @commands.command(name="shuffle")
@@ -207,7 +215,7 @@ class Playback(commands.Cog):
     @commands.command(name="np", aliases=["now", "playing"])
     async def now_playing(self, ctx: Context):
         """Displays the currently playing song"""
-        if ctx.voice_client is None or not ctx.voice_client.is_playing():
+        if ctx.voice_client is None:
             return
 
         if (
@@ -219,7 +227,7 @@ class Playback(commands.Cog):
 
         current = playlist.current
         em = discord.Embed(color=discord.Color(0x000000))
-        em.title = current["title"]
+        em.title = f'{current["title"]}{" (paused)" if ctx.voice_client.is_paused() else ""}'
         em.url = current["url"]
         progress = ctx.progress
         em.add_field(
@@ -282,6 +290,26 @@ class Playback(commands.Cog):
             )
 
         ctx.playlist.move_song(song_position, new_position)
+        await ctx.message.add_reaction("✅")
+
+    @commands.command(name="vol", aliases=["volume"])
+    async def volume(self, ctx: Context, volume: int | None):
+        """Changes the volume"""
+        if ctx.playlist is None:
+            return
+
+        if volume is None:
+            return await ctx.send(f"Volume: {ctx.playlist.volume * 100:.0f}")
+
+        if volume < 0 or volume > 100:
+            return await ctx.send("Volume must be between 0 and 100")
+
+        vol = volume / 100
+        
+        ctx.playlist.volume = vol
+        if ctx.voice_client and ctx.voice_client.source:
+            ctx.voice_client.source.volume = vol
+
         await ctx.message.add_reaction("✅")
 
 

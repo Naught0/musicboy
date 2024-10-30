@@ -55,6 +55,7 @@ class PlaylistState(TypedDict):
     playlist: list[str]
     idx: int
     metadata: MutableMapping[str, SongMetadata]
+    volume: float
 
 
 class Playlist:
@@ -71,6 +72,7 @@ class Playlist:
         idx: int = 0,
         metadata: MutableMapping[str, SongMetadata] = {},
         loop=False,
+        volume=0.05,
     ):
         self.idx = idx
         self.data_dir = data_dir
@@ -78,6 +80,7 @@ class Playlist:
         self.metadata = metadata
         self.loop = loop
         self.guild_id = guild_id
+        self._volume = volume
 
         self.state_path = Path(data_dir) / f"state_{guild_id}.json"
         try:
@@ -93,6 +96,15 @@ class Playlist:
 
         self.find_missing_metadata()
 
+    @property
+    def volume(self):
+        return self._volume
+
+    @volume.setter
+    @write_state_after
+    def volume(self, value: float):
+        self._volume = value
+
     def find_missing_metadata(self):
         for url in self.playlist:
             if url not in self.metadata:
@@ -104,6 +116,7 @@ class Playlist:
         self.idx = state["idx"]
         self.metadata = state["metadata"]
         self.guild_id = state["guild_id"]
+        self.volume = state["volume"]
 
     @classmethod
     def from_state(cls: type[Playlist], state: PlaylistState):
@@ -140,6 +153,7 @@ class Playlist:
             idx=self.idx,
             metadata=self.metadata,
             guild_id=self.guild_id,
+            volume=self.volume,
         )
 
     @property

@@ -16,6 +16,13 @@ class Context(commands.Context):
 
         return self.bot.progress.get(self.guild.id)
 
+    @progress.setter
+    def progress(self, progress: ProgressTracker):
+        if not self.guild:
+            return
+
+        self.bot.progress[self.guild.id] = progress
+
     @property
     def playlist(self) -> Playlist | None:
         if not self.guild:

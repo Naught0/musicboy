@@ -8,19 +8,28 @@ def seconds_to_duration(seconds: int):
 
 
 class ProgressTracker:
-    start_time: int
+    _duration = 0
+    paused = False
 
-    @classmethod
-    def start(cls):
-        self = cls()
+    def start(self):
+        self.paused = False
         self.start_time = int(time())
 
-        return self
+    def stop(self):
+        self.stop_time = int(time())
+        self._duration += self.stop_time - self.start_time
+        self.paused = True
 
     @property
     def elapsed_seconds(self):
-        return int(time()) - self.start_time
+        if self.paused:
+            return self._duration
+
+        return int(time()) - self.start_time + self._duration
 
     @property
     def elapsed(self):
+        if self.paused:
+            return seconds_to_duration(self._duration)
+
         return seconds_to_duration(self.elapsed_seconds)
