@@ -10,7 +10,7 @@ class SongMetadata(TypedDict):
     url: str
 
 
-def get_metadata(url: str, base_dir: str = "musicboy/data") -> SongMetadata:
+def get_metadata(url: str) -> SongMetadata:
     """Get metadata from YouTube URL."""
     with yt_dlp.YoutubeDL(params={"quiet": True}) as ydl:
         meta = ydl.extract_info(url, download=False, process=False)
@@ -28,13 +28,13 @@ def get_metadata(url: str, base_dir: str = "musicboy/data") -> SongMetadata:
 def download_audio(url: str, filename: str) -> str:
     """Download best audio from YouTube URL to specified filename."""
     opts = {
-        "format": "bestaudio",
+        "format": "m4a/bestaudio/best",
         "outtmpl": filename,
         "quiet": True,
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
+                "preferredcodec": "m4a",
             }
         ],
     }
