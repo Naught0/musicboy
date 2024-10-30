@@ -11,6 +11,8 @@ discord-py = {extras = ["voice"], version = "^2.4.0"}
 yt-dlp = "^2024.10.22"
 python-dotenv = "^1.0.1"
 audioop-lts = "^0.2.1"
+asyncer = "^0.0.8"
+typing-extensions = "^4.12.2"
 
 
 [tool.poetry.group.dev.dependencies]
