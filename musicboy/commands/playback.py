@@ -5,13 +5,22 @@ from discord.ext import commands
 
 from musicboy.context import Context
 from musicboy.playlist import cache_next_songs, cache_song, get_song_path
+from musicboy.progress import ProgressTracker, seconds_to_duration
 from musicboy.threads import run_in_thread
 
 
 def after_song_finished(ctx: Context, error=None):
+    if ctx.voice_client is None or not ctx.voice_client.is_connected():
+        return
+
     ctx.bot.playlist.next()
     play_song(ctx)
     run_in_thread(lambda: cache_next_songs(ctx.bot.playlist))
+    chan_ids = [c.channel.id for c in ctx.bot.voice_clients]
+
+    for k in ctx.bot.progress:
+        if k not in chan_ids:
+            del ctx.bot.progress[k]
 
 
 def get_song_source(song_id: str):
@@ -19,10 +28,13 @@ def get_song_source(song_id: str):
 
 
 def play_song(ctx: Context):
+    if ctx.voice_client is None or not ctx.voice_client.is_connected():
+        return
+
     song = ctx.bot.playlist.current
     path = get_song_path(song["id"])
     if path is None:
-        raise ValueError(f"Could not find audio for song: {song['title']}")
+        raise ValueError(f"Can't play song. Could not find audio for: {song['title']}")
 
     if ctx.voice_client.is_playing():
         ctx.voice_client.source = get_song_source(song["id"])
@@ -34,6 +46,9 @@ def play_song(ctx: Context):
             signal_type="music",
         )
 
+    channel_id = ctx.voice_client.channel.id
+    ctx.bot.progress[channel_id] = ProgressTracker()
+
 
 class Playback(commands.Cog):
     @commands.command(name="play", aliases=["p", "prepend"])
@@ -41,7 +56,7 @@ class Playback(commands.Cog):
         """Play a song now if one is not already playing. Otherwise, song plays next"""
         if ctx.voice_client is not None:
             if ctx.voice_client.is_paused():
-                ctx.guild.voice_client.resume()
+                return ctx.voice_client.resume()
 
         if url_or_urls is None:
             if len(ctx.bot.playlist.playlist) == 0:
@@ -85,7 +100,7 @@ class Playback(commands.Cog):
         """Skips to the next song in the queue"""
         ctx.bot.playlist.next()
 
-        if ctx.voice_client.is_connected():
+        if ctx.voice_client and ctx.voice_client.is_connected():
             play_song(ctx)
 
         run_in_thread(lambda: cache_next_songs(ctx.bot.playlist))
@@ -96,7 +111,7 @@ class Playback(commands.Cog):
         """Repeats the current song"""
         ctx.bot.playlist.prev()
 
-        if ctx.voice_client.is_connected():
+        if ctx.voice_client and ctx.voice_client.is_connected():
             play_song(ctx)
 
     @commands.command(name="pause")
@@ -120,12 +135,33 @@ class Playback(commands.Cog):
 
         next_up = playlist.playlist[playlist.idx + 1 :]
         if next_up:
-            msg = "\n".join(f"{idx+2}. {ctx.bot.playlist.metadata.get(url, {}). get("title") or url}" for idx, url in enumerate(next_up))
+            msg = "\n".join(
+                f"{idx+2}. {ctx.bot.playlist.metadata.get(url, {}). get("title") or url}"
+                for idx, url in enumerate(next_up)
+            )
         else:
             msg = "No more songs in the queue"
         msg = f"```1. {playlist.current['title']}{" (Now playing)" if ctx.voice_client and ctx.voice_client.is_playing() else ""}\n{msg}```"
 
         await ctx.send(msg)
+
+    @commands.command(name="np", aliases=["now", "playing"])
+    async def now_playing(self, ctx: Context):
+        """Displays the currently playing song"""
+        if ctx.voice_client is None or not ctx.voice_client.is_playing():
+            return
+
+        current = ctx.bot.playlist.current
+        em = discord.Embed(color=discord.Color(0x000000))
+        em.title = current["title"]
+        em.url = current["url"]
+        elapsed_s = ctx.bot.progress[ctx.voice_client.channel.id].elapsed
+        em.add_field(
+            name="Progress",
+            value=f"`{elapsed_s} / {seconds_to_duration(current['duration'])}`",
+        )
+
+        await ctx.send(embed=em)
 
 
 async def setup(bot):
