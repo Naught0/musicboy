@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import json
 import random
+from collections.abc import MutableMapping
+from functools import wraps
 from pathlib import Path
+from traceback import print_exc
+from typing import TypedDict
 
-from musicboy.sources.youtube.youtube import (SongMetadata, download_audio,
-                                              get_metadata)
+from musicboy.sources.youtube.youtube import SongMetadata, download_audio, get_metadata
+from musicboy.threads import run_in_thread
 
 
-def get_song_path(song: SongMetadata, base_dir: str = "musicboy/data") -> Path | None:
+def get_song_path(song_id: str, base_dir: str = "musicboy/data") -> Path | None:
     try:
-        path = next(Path(base_dir).glob(f"{song['id']}.*"))
+        path = next(Path(base_dir).glob(f"{song_id}.*"))
     except StopIteration:
         return None
 
@@ -23,37 +27,65 @@ def cache_song(song: SongMetadata, path: Path):
 
 def cache_next_songs(playlist: Playlist):
     for url in playlist.playlist[:3]:
-        if get_song_path(meta := playlist.metadata[url]) is None:
+        meta = playlist.metadata[url]
+        if get_song_path(meta["id"]) is None:
             print("Caching song", meta["title"])
-            cache_song(meta, Path(playlist.data_dir) / meta["id"])
+            run_in_thread(
+                lambda: download_audio(
+                    meta["url"], str(Path(playlist.data_dir) / meta["id"])
+                )
+            )
+
+
+def write_state_after(func):
+    @wraps(func)
+    def wrapper(self: Playlist, *args, **kwargs):
+        result = func(self, *args, **kwargs)
+        with self.state_path.open("w") as f:
+            json.dump(self.state, f)
+        return result
+
+    return wrapper
+
+
+class PlaylistState(TypedDict):
+    playlist: list[str]
+    idx: int
+    metadata: MutableMapping[str, SongMetadata]
 
 
 class Playlist:
     playlist: list[str]
+    data_dir: str
+    metadata: MutableMapping[str, SongMetadata]
+    idx: int
 
     def __init__(
         self,
         data_dir: str = "musicboy/data",
+        playlist: list[str] = [],
+        idx: int = 0,
+        metadata: MutableMapping[str, SongMetadata] = {},
     ):
-        self.idx = 0
+        self.idx = idx
         self.data_dir = data_dir
-        self.playlist_path = f"{data_dir}/playlist.txt"
-        self.metadata_path = f"{data_dir}/metadata.json"
-        self.history_path = f"{data_dir}/history.txt"
+        self.playlist = playlist
+        self.metadata = metadata
 
-        with open(self.metadata_path, "r") as meta_file:
-            self.metadata = json.load(meta_file)
-        with open(self.playlist_path, "r") as playlist_file:
-            self.playlist = playlist_file.read().splitlines()
-        with open(self.history_path, "r") as history_file:
-            self.discarded = history_file.read().splitlines()
+        self.state_path = Path(data_dir) / "state.json"
+        try:
+            self._restore_state()
+        except FileNotFoundError:
+            with open(self.state_path, "w") as f:
+                json.dump(self.state, f)
+        except json.JSONDecodeError:
+            pass
+        except Exception:
+            print_exc()
+        else:
+            print("Loaded state from ", self.state_path)
 
         self.find_missing_metadata()
-
-    def _trim_past_songs(self, to_idx: int):
-        self.discarded.extend(self.playlist[:to_idx])
-        self.playlist = self.playlist[to_idx:]
-        self.idx = 0
 
     def find_missing_metadata(self):
         for url in self.playlist:
@@ -61,23 +93,32 @@ class Playlist:
                 print("Finding metadata for", url)
                 self.metadata[url] = get_metadata(url)
 
-    def write_state(self):
-        with open(self.playlist_path, "w") as playlist_file, open(
-            self.history_path, "w"
-        ) as history_file:
-            playlist_file.write("\n".join(self.playlist))
-            history_file.write("\n".join(self.discarded))
+    def _restore_state(self):
+        with self.state_path.open() as f:
+            self._set_state(json.load(f))
 
-    def write_metadata(self):
-        with open(self.metadata_path, "w") as meta_file:
-            json.dump(self.metadata, meta_file)
+    def _set_state(self, state: PlaylistState):
+        self.playlist = state["playlist"]
+        self.idx = state["idx"]
+        self.metadata = state["metadata"]
 
+    def _write_state(self):
+        with self.state_path.open("w") as f:
+            json.dump(self.state, f)
+
+    @property
+    def state(self) -> PlaylistState:
+        return PlaylistState(
+            playlist=self.playlist, idx=self.idx, metadata=self.metadata
+        )
+
+    @write_state_after
     def shuffle(self):
         np, *rest = self.playlist
         random.shuffle(rest)
         self.playlist = [np, *rest]
-        self.write_state()
 
+    @write_state_after
     def move_song(self, url: str, position: int):
         if position > len(self.playlist) - 1:
             raise ValueError("Position out of range")
@@ -87,65 +128,50 @@ class Playlist:
 
         self.playlist.insert(position, self.playlist.pop(self.playlist.index(url)))
 
-        self.write_state()
-
     @property
     def current(self) -> SongMetadata:
-        if self.idx < 0:
-            self.idx = 0
         url = self.playlist[self.idx]
-
         return self.metadata[url]
 
+    @write_state_after
     def prepend_song(self, url: str):
-        self.playlist.append(url)
+        self.playlist.insert(0 if len(self.playlist) == 0 else self.idx + 1, url)
         self.metadata[url] = get_metadata(url)
-        self.playlist.insert(0 if len(self.playlist) == 0 else 1, url)
 
-        self.write_state()
-        self.write_metadata()
-
-        return self.current
-
+    @write_state_after
     def append_song(self, url: str):
         self.playlist.append(url)
         self.metadata[url] = get_metadata(url)
 
-        self.write_state()
-        self.write_metadata()
-
-        return self.current
-
+    @write_state_after
     def goto(self, idx: int):
         if 0 > idx > len(self.playlist) - 1:
             raise ValueError("Index out of range")
 
-        self._trim_past_songs(idx)
-        self.write_state()
+        self.idx = idx
 
         return self.current
 
+    @write_state_after
     def next(self):
         new_idx = self.idx + 1
         if new_idx > len(self.playlist) - 1:
-            self.playlist = list(reversed(self.discarded))
+            new_idx = 0
 
-        self._trim_past_songs(new_idx)
-        self.write_state()
-
+        self.idx = new_idx
         return self.current
 
+    @write_state_after
     def prev(self):
         new_idx = self.idx - 1
-        if new_idx < 0 and len(self.discarded) > 0:
-            self.playlist.insert(0, self.discarded.pop(-1))
+        new_idx = new_idx if new_idx >= 0 else len(self.playlist) - 1
+        print("NEW IDX", new_idx)
 
-        self.idx = new_idx if new_idx >= 0 else 0
-        self.write_state()
+        self.idx = new_idx
 
         return self.current
 
+    @write_state_after
     def clear(self):
-        self.discarded = self.playlist
         self.playlist = []
-        self.write_state()
+        self.idx = 0

@@ -11,9 +11,6 @@ load_dotenv()
 
 
 def initialize_bot(bot_token: str):
-    with open("musicboy/data/playlist.txt") as f:
-        playlist = f.read().splitlines()
-
     intents = discord.Intents.all()
     playlist = Playlist()
     bot = MusicBot(command_prefix="!!", intents=intents, playlist=playlist)
