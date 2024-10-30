@@ -6,10 +6,11 @@ authors = ["James E <4589250+Naught0@users.noreply.github.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.13"
 discord-py = {extras = ["voice"], version = "^2.4.0"}
 yt-dlp = "^2024.10.22"
 python-dotenv = "^1.0.1"
+audioop-lts = "^0.2.1"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -20,5 +21,3 @@ isort = "^5.13.2"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.pyright]
-reportOptionalMemberAccess = false
