@@ -8,8 +8,14 @@ def seconds_to_duration(seconds: int):
 
 
 class ProgressTracker:
-    def __init__(self):
+    start_time: int
+
+    @classmethod
+    def start(cls):
+        self = cls()
         self.start_time = int(time())
+
+        return self
 
     @property
     def elapsed_seconds(self):
