@@ -4,17 +4,14 @@ import sys
 import discord
 from dotenv import load_dotenv
 
-from musicboy.bot import MusicBot
-from musicboy.playlist import Playlist
+from musicboy.bot import MusicBoy
 
 load_dotenv()
 
 
 def initialize_bot(bot_token: str):
     intents = discord.Intents.all()
-    playlist = Playlist()
-    bot = MusicBot(command_prefix="!!", intents=intents, playlist=playlist)
-
+    bot = MusicBoy(command_prefix="!!", intents=intents)
     bot.run(bot_token)
 
 

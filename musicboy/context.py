@@ -1,7 +1,7 @@
 from discord.ext import commands
 
-from musicboy.bot import MusicBot
+from musicboy.bot import MusicBoy
 
 
 class Context(commands.Context):
-    bot: MusicBot
+    bot: MusicBoy

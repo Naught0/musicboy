@@ -52,6 +52,7 @@ class PlaylistExhausted(Exception):
 
 
 class PlaylistState(TypedDict):
+    channel_id: int
     playlist: list[str]
     idx: int
     metadata: MutableMapping[str, SongMetadata]
@@ -65,6 +66,7 @@ class Playlist:
 
     def __init__(
         self,
+        channel_id: int,
         data_dir: str = "musicboy/data",
         playlist: list[str] = [],
         idx: int = 0,
@@ -76,17 +78,17 @@ class Playlist:
         self.playlist = playlist
         self.metadata = metadata
         self.loop = loop
+        self.channel_id = channel_id
 
-        self.state_path = Path(data_dir) / "state.json"
+        self.state_path = Path(data_dir) / f"state_{channel_id}.json"
         try:
-            self._restore_state()
+            with self.state_path.open() as f:
+                Playlist.from_state(json.load(f))
         except FileNotFoundError:
             with open(self.state_path, "w") as f:
                 json.dump(self.state, f)
         except json.JSONDecodeError:
             pass
-        except Exception:
-            print_exc()
         else:
             print("Loaded state from ", self.state_path)
 
@@ -98,14 +100,16 @@ class Playlist:
                 print("Finding metadata for", url)
                 self.metadata[url] = get_metadata(url)
 
-    def _restore_state(self):
-        with self.state_path.open() as f:
-            self._set_state(json.load(f))
+    @classmethod
+    def from_state(cls: type[Playlist], state: PlaylistState):
+        self = cls(
+            state["channel_id"],
+            playlist=state["playlist"],
+            idx=state["idx"],
+            metadata=state["metadata"],
+        )
 
-    def _set_state(self, state: PlaylistState):
-        self.playlist = state["playlist"]
-        self.idx = state["idx"]
-        self.metadata = state["metadata"]
+        return self
 
     def _write_state(self):
         with self.state_path.open("w") as f:
@@ -127,7 +131,10 @@ class Playlist:
     @property
     def state(self) -> PlaylistState:
         return PlaylistState(
-            playlist=self.playlist, idx=self.idx, metadata=self.metadata
+            playlist=self.playlist,
+            idx=self.idx,
+            metadata=self.metadata,
+            channel_id=self.channel_id,
         )
 
     @property
