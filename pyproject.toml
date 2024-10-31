@@ -6,7 +6,7 @@ authors = ["James E <4589250+Naught0@users.noreply.github.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.13"
+python = "^3.12.6"
 discord-py = {extras = ["voice"], version = "^2.4.0"}
 yt-dlp = "^2024.10.22"
 python-dotenv = "^1.0.1"
