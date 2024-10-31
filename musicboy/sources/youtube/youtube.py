@@ -18,8 +18,6 @@ def _fetch_metadata(url: str) -> SongMetadata:
         if meta is None:
             raise ValueError("Could not get metadata from YouTube URL")
 
-        print(meta)
-
         return SongMetadata(
             id=meta["id"],
             title=meta["title"],
