@@ -1,0 +1,8 @@
+services:
+  musicboy:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./musicboy/data:/app/musicboy/data
+    restart: unless-stopped
