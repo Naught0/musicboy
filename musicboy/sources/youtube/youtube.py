@@ -1,6 +1,7 @@
 from typing import TypedDict
 
 import yt_dlp
+from asyncer import asyncify
 
 
 class SongMetadata(TypedDict):
@@ -10,7 +11,7 @@ class SongMetadata(TypedDict):
     url: str
 
 
-def get_metadata(url: str) -> SongMetadata:
+def fetch_metadata(url: str) -> SongMetadata:
     """Get metadata from YouTube URL."""
     with yt_dlp.YoutubeDL(params={"quiet": True}) as ydl:
         meta = ydl.extract_info(url, download=False, process=False)
@@ -23,6 +24,9 @@ def get_metadata(url: str) -> SongMetadata:
             duration=meta["duration"],
             url=url,
         )
+
+
+fetch_metadata_async = asyncify(fetch_metadata)
 
 
 def download_audio(url: str, filename: str) -> str:
@@ -42,3 +46,6 @@ def download_audio(url: str, filename: str) -> str:
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([url])
     return filename
+
+
+download_audio_async = asyncify(download_audio)

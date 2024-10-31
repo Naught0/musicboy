@@ -2,18 +2,18 @@ import asyncio
 from pathlib import Path
 
 import discord
-from asyncer import asyncify
 from discord.ext import commands
 
 from musicboy.bot import Context
+from musicboy.database import Database
 from musicboy.playlist import (
     PlaylistExhausted,
     cache_next_songs,
-    cache_song,
+    cache_song_async,
     get_song_path,
 )
 from musicboy.progress import ProgressTracker, seconds_to_duration
-from musicboy.threads import run_in_thread
+from musicboy.sources.youtube.youtube import fetch_metadata_async
 
 
 def after_song_finished(ctx: Context, error=None):
@@ -29,9 +29,11 @@ def after_song_finished(ctx: Context, error=None):
     except PlaylistExhausted:
         return
 
-    asyncio.run(play_song(ctx))
-    run_in_thread(lambda: cache_next_songs(playlist))
-    guild_ids = [guild for guild in ctx.bot.guilds]
+    asyncio.create_task(play_song(ctx))
+
+    asyncio.create_task(cache_next_songs(playlist, Database(ctx.db.path)))
+
+    guild_ids = [v.guild.id for v in ctx.bot.voice_clients]
 
     for k in ctx.bot.progress:
         if k not in guild_ids:
@@ -57,10 +59,10 @@ async def play_song(ctx: Context):
     if ctx.guild is None:
         raise ValueError("Bot must be in a guild (not DM or group DM)")
 
-    song = playlist.current
+    song = ctx.db.get_metadata(playlist.current)
     path = get_song_path(song["id"])
     if path is None:
-        await asyncify(cache_song)(song, Path(playlist.data_dir) / song["id"])
+        await cache_song_async(song, Path(playlist.data_dir) / song["id"])
         path = get_song_path(song["id"])
 
     if path is None:
@@ -81,11 +83,12 @@ async def play_song(ctx: Context):
     progress = ProgressTracker()
     progress.start()
     ctx.bot.progress[guild_id] = progress
+    ctx.update_last_active()
 
 
 class Playback(commands.Cog):
     @commands.command(name="play", aliases=["p", "prepend"])
-    async def play(self, ctx: Context, url_or_urls: str | None):
+    async def play(self, ctx: Context, *, url_or_urls: str | None):
         """Play, resume, or queue a song next"""
         if ctx.voice_client is not None:
             if ctx.voice_client.is_paused():
@@ -110,24 +113,30 @@ class Playback(commands.Cog):
             return await play_song(ctx)
 
         for url in url_or_urls.split():
+            url = url.split("&")[0]
             ctx.playlist.prepend_song(url)
+            meta = await fetch_metadata_async(url_or_urls)
+            await cache_song_async(
+                meta,
+                Path(ctx.playlist.data_dir) / meta["id"],
+            )
 
         if ctx.voice_client.is_playing():
             return
 
-        cache_song(
-            ctx.playlist.current,
-            Path(ctx.playlist.data_dir) / ctx.playlist.current["id"],
-        )
         await play_song(ctx)
 
     @commands.command(name="add", aliases=["append"])
-    async def add_to_queue(self, ctx: Context, url: str):
+    async def add_to_queue(self, ctx: Context, *, urls: str):
         """Adds a song to the end of the queue"""
         if ctx.playlist is None:
             return
 
-        ctx.playlist.append_song(url)
+        for url in urls.split():
+            url = url.split("&")[0]
+            ctx.playlist.append_song(url)
+            meta = await fetch_metadata_async(url)
+            ctx.db.write_metadata(meta)
 
     @commands.command(name="stop", aliases=["leave", "end", "quit"])
     async def stop(self, ctx: Context):
@@ -152,7 +161,7 @@ class Playback(commands.Cog):
         if ctx.voice_client and ctx.voice_client.is_connected():
             await play_song(ctx)
 
-        run_in_thread(lambda: cache_next_songs(playlist))
+        await cache_next_songs(playlist, ctx.db)
 
         await ctx.message.add_reaction("✅")
 
@@ -199,7 +208,7 @@ class Playback(commands.Cog):
         if next_up is not None:
             next_songs = []
             for idx, url in enumerate(next_up):
-                song = playlist.metadata[url]
+                song = ctx.db.get_metadata(url)
                 duration = seconds_to_duration(song["duration"])
                 next_songs.append(
                     f"**{idx+2}.** [{song['title']}]({song['url']}) ({duration})"
@@ -207,7 +216,9 @@ class Playback(commands.Cog):
             description = "\n".join(next_songs)
         else:
             description = "No more songs in the queue"
-        description = f"**1.** [{playlist.current['title']}]({playlist.current['url']}) ({seconds_to_duration(playlist.current['duration'])}) {" (Now playing)" if ctx.voice_client and ctx.voice_client.is_playing() else ""}\n{description}"
+
+        meta = ctx.db.get_metadata(playlist.current)
+        description = f"**1.** [{meta['title']}]({meta['url']}) ({seconds_to_duration(meta['duration'])}) {" (Now playing)" if ctx.voice_client and ctx.voice_client.is_playing() else ""}\n{description}"
 
         em.description = description
 
@@ -226,22 +237,32 @@ class Playback(commands.Cog):
         ):
             return
 
-        current = playlist.current
+        meta = ctx.db.get_metadata(playlist.current)
         em = discord.Embed(color=discord.Color(0x000000))
-        em.title = f'{"⏸️" if ctx.voice_client.is_paused() else "▶️"} {current["title"]}'
-        em.url = current["url"]
+        em.title = f'{"⏸️" if ctx.voice_client.is_paused() else "▶️"} {meta["title"]}'
+        em.url = meta["url"]
         progress = ctx.progress
         em.add_field(
             name="Progress",
-            value=f"{progress.elapsed} / {seconds_to_duration(current['duration'])} {int(100 * progress.elapsed_seconds / current['duration'])}%",
+            value=(
+                f"{progress.elapsed} / {seconds_to_duration(meta['duration'])}"
+                f" ({int(100 * progress.elapsed_seconds / meta['duration'])}%)"
+            ),
         )
 
+        up_next = "*Nothing*"
         if playlist.next_song:
-            em.add_field(
-                name="Next up",
-                value=f"[{playlist.next_song['title']}]({playlist.next_song['url']}) ({seconds_to_duration(playlist.next_song['duration'])})",
-                inline=False,
+            next_meta = ctx.db.get_metadata(playlist.next_song)
+            up_next = (
+                f"[{next_meta['title']}]({next_meta['url']})"
+                f" ({seconds_to_duration(next_meta['duration'])})"
             )
+
+        em.add_field(
+            name="Up next",
+            value=up_next,
+            inline=False,
+        )
 
         await ctx.send(embed=em)
 

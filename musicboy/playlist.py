@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import random
-from collections.abc import MutableMapping
 from functools import wraps
 from pathlib import Path
 from typing import TypedDict
 
-from musicboy.sources.youtube.youtube import SongMetadata, download_audio, get_metadata
-from musicboy.threads import run_in_thread
+from asyncer import asyncify
+
+from musicboy.database import Database
+from musicboy.sources.youtube.youtube import SongMetadata, download_audio
 
 
 def get_song_path(song_id: str, base_dir: str = "musicboy/data") -> Path | None:
@@ -24,15 +25,20 @@ def cache_song(song: SongMetadata, path: Path):
     return download_audio(song["url"], str(path))
 
 
-def cache_next_songs(playlist: Playlist):
+cache_song_async = asyncify(cache_song)
+
+
+def _cache_next_songs(playlist: Playlist, db: Database):
     for url in playlist.playlist[playlist.idx + 1 : playlist.idx + 4]:
-        meta = playlist.metadata[url]
+        meta = db.get_metadata(url)
+        if meta is None:
+            continue
+
         if get_song_path(meta["id"]) is None:
-            run_in_thread(
-                lambda: download_audio(
-                    meta["url"], str(Path(playlist.data_dir) / meta["id"])
-                )
-            )
+            download_audio(meta["url"], str(Path(playlist.data_dir) / meta["id"]))
+
+
+cache_next_songs = asyncify(_cache_next_songs)
 
 
 def write_state_after(func):
@@ -54,14 +60,12 @@ class PlaylistState(TypedDict):
     guild_id: int
     playlist: list[str]
     idx: int
-    metadata: MutableMapping[str, SongMetadata]
     volume: float
 
 
 class Playlist:
     playlist: list[str]
     data_dir: str
-    metadata: MutableMapping[str, SongMetadata]
     idx: int
 
     def __init__(
@@ -70,14 +74,12 @@ class Playlist:
         data_dir: str = "musicboy/data",
         playlist: list[str] = [],
         idx: int = 0,
-        metadata: MutableMapping[str, SongMetadata] = {},
         loop=False,
         volume=0.05,
     ):
         self.idx = idx
         self.data_dir = data_dir
         self.playlist = playlist
-        self.metadata = metadata
         self.loop = loop
         self.guild_id = guild_id
         self._volume = volume
@@ -94,8 +96,6 @@ class Playlist:
         else:
             print("Loaded state from ", self.state_path)
 
-        self.find_missing_metadata()
-
     @property
     def volume(self):
         return self._volume
@@ -105,16 +105,9 @@ class Playlist:
     def volume(self, value: float):
         self._volume = value
 
-    def find_missing_metadata(self):
-        for url in self.playlist:
-            if url not in self.metadata:
-                print("Finding metadata for", url)
-                self.metadata[url] = get_metadata(url)
-
     def _load_state(self, state: PlaylistState):
         self.playlist = state["playlist"]
         self.idx = state["idx"]
-        self.metadata = state["metadata"]
         self.guild_id = state["guild_id"]
         self.volume = state["volume"]
 
@@ -124,7 +117,7 @@ class Playlist:
             state["guild_id"],
             playlist=state["playlist"],
             idx=state["idx"],
-            metadata=state["metadata"],
+            volume=state["volume"],
         )
 
         return self
@@ -142,24 +135,20 @@ class Playlist:
         if not self.has_next_song:
             return None
 
-        return self.metadata[
-            self.playlist[self.idx + 1 if self.idx + 1 < len(self.playlist) else 0]
-        ]
+        return self.playlist[self.idx + 1 if self.idx + 1 < len(self.playlist) else 0]
 
     @property
     def state(self) -> PlaylistState:
         return PlaylistState(
             playlist=self.playlist,
             idx=self.idx,
-            metadata=self.metadata,
             guild_id=self.guild_id,
             volume=self.volume,
         )
 
     @property
-    def current(self) -> SongMetadata:
-        url = self.playlist[self.idx]
-        return self.metadata[url]
+    def current(self) -> str:
+        return self.playlist[self.idx]
 
     @write_state_after
     def shuffle(self):
@@ -182,12 +171,10 @@ class Playlist:
     @write_state_after
     def prepend_song(self, url: str):
         self.playlist.insert(0 if len(self.playlist) == 0 else self.idx + 1, url)
-        self.metadata[url] = get_metadata(url)
 
     @write_state_after
     def append_song(self, url: str):
         self.playlist.append(url)
-        self.metadata[url] = get_metadata(url)
 
     @write_state_after
     def goto(self, idx: int):
@@ -220,7 +207,7 @@ class Playlist:
 
     @write_state_after
     def clear(self):
-        self.playlist = self.playlist[:1]
+        self.playlist = []
         self.idx = 0
 
     @write_state_after
