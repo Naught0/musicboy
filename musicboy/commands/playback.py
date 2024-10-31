@@ -125,17 +125,30 @@ class Playback(commands.Cog):
 
         await play_song(ctx)
 
+        await ctx.message.add_reaction("✅")
+
     @commands.command(name="add", aliases=["append"])
     async def add_to_queue(self, ctx: Context, *, urls: str):
         """Adds a song to the end of the queue"""
         if ctx.playlist is None:
             return
 
+        fail = False
         for url in urls.split():
             url = url.split("&")[0]
-            meta = await fetch_metadata(url)
+            try:
+                meta = await fetch_metadata(url)
+            except Exception:
+                fail = True
+                continue
+
             ctx.db.write_metadata(meta)
             ctx.playlist.append_song(url)
+
+        if fail:
+            await ctx.message.add_reaction("❌")
+
+        await ctx.message.add_reaction("✅")
 
     @commands.command(name="stop", aliases=["leave", "end", "quit"])
     async def stop(self, ctx: Context):
