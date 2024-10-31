@@ -41,6 +41,7 @@ def after_song_finished(ctx: Context, error=None):
 def get_song_source(song_id: str):
     return make_source(str(get_song_path(song_id)))
 
+
 def make_source(path: str, volume: float = 0.05):
     return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(path), volume=volume)
 
@@ -227,12 +228,12 @@ class Playback(commands.Cog):
 
         current = playlist.current
         em = discord.Embed(color=discord.Color(0x000000))
-        em.title = f'{current["title"]}{" (paused)" if ctx.voice_client.is_paused() else ""}'
+        em.title = f'{"⏸️" if ctx.voice_client.is_paused() else "▶️"} {current["title"]}'
         em.url = current["url"]
         progress = ctx.progress
         em.add_field(
             name="Progress",
-            value=f"`{progress.elapsed} / {seconds_to_duration(current['duration'])} ({int(100 * progress.elapsed_seconds / current['duration'])}%)`",
+            value=f"{progress.elapsed} / {seconds_to_duration(current['duration'])} {int(100 * progress.elapsed_seconds / current['duration'])}%",
         )
 
         if playlist.next_song:
@@ -305,7 +306,7 @@ class Playback(commands.Cog):
             return await ctx.send("Volume must be between 0 and 100")
 
         vol = volume / 100
-        
+
         ctx.playlist.volume = vol
         if ctx.voice_client and ctx.voice_client.source:
             ctx.voice_client.source.volume = vol
