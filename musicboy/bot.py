@@ -101,7 +101,7 @@ class MusicBoy(commands.Bot):
                 chan = get_music_channel(guild)
                 if chan is not None:
                     await chan.send(
-                        f"Inactive for {idle_time // 60}) minutes. Leaving voice 👋",
+                        f"Inactive for {idle_time // 60} minutes. Leaving voice 👋",
                         delete_after=60,
                     )
 
