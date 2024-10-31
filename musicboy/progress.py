@@ -4,7 +4,7 @@ from time import time
 def seconds_to_duration(seconds: int):
     minutes = (seconds % 3600) // 60
     secs = seconds % 60
-    return f"{minutes:02d}:{secs:02d}"
+    return f"{minutes:02.0f}:{secs:02.0f}"
 
 
 class ProgressTracker:
