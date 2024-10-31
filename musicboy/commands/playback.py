@@ -29,8 +29,8 @@ def after_song_finished(ctx: Context, error=None):
     except PlaylistExhausted:
         return
 
-    asyncio.create_task(play_song(ctx))
-    asyncio.create_task(cache_next_songs(playlist, ctx.db))
+    ctx.bot.loop.create_task(play_song(ctx))
+    ctx.bot.loop.create_task(cache_next_songs(playlist, ctx.db))
 
     guild_ids = [v.guild.id for v in ctx.bot.voice_clients]
 
@@ -113,8 +113,8 @@ class Playback(commands.Cog):
 
         for url in url_or_urls.split():
             url = url.split("&")[0]
-            ctx.playlist.prepend_song(url)
             meta = await fetch_metadata(url_or_urls)
+            ctx.playlist.prepend_song(url)
             await cache_song_async(
                 meta,
                 Path(ctx.playlist.data_dir) / meta["id"],
@@ -133,9 +133,9 @@ class Playback(commands.Cog):
 
         for url in urls.split():
             url = url.split("&")[0]
-            ctx.playlist.append_song(url)
             meta = await fetch_metadata(url)
             ctx.db.write_metadata(meta)
+            ctx.playlist.append_song(url)
 
     @commands.command(name="stop", aliases=["leave", "end", "quit"])
     async def stop(self, ctx: Context):
