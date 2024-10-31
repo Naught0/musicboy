@@ -1,11 +1,9 @@
-import asyncio
 from pathlib import Path
 
 import discord
 from discord.ext import commands
 
 from musicboy.bot import Context
-from musicboy.database import Database
 from musicboy.playlist import (
     PlaylistExhausted,
     cache_next_songs,
@@ -39,7 +37,7 @@ def after_song_finished(ctx: Context, error=None):
             del ctx.bot.progress[k]
 
 
-def get_song_source(song_id: str):
+def source_from_id(song_id: str):
     return make_source(str(get_song_path(song_id)))
 
 
@@ -68,7 +66,7 @@ async def play_song(ctx: Context):
         raise ValueError("Can't play song. Audio not downloaded")
 
     if ctx.voice_client.is_playing():
-        ctx.voice_client.source = get_song_source(song["id"])
+        ctx.voice_client.source = source_from_id(song["id"])
         ctx.voice_client.source.volume = ctx.playlist.volume
     else:
         ctx.voice_client.play(
@@ -114,6 +112,7 @@ class Playback(commands.Cog):
         for url in url_or_urls.split():
             url = url.split("&")[0]
             meta = await fetch_metadata(url_or_urls)
+            ctx.db.write_metadata(meta)
             ctx.playlist.prepend_song(url)
             await cache_song_async(
                 meta,
