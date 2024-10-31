@@ -13,7 +13,7 @@ from musicboy.playlist import (
     get_song_path,
 )
 from musicboy.progress import ProgressTracker, seconds_to_duration
-from musicboy.sources.youtube.youtube import fetch_metadata_async
+from musicboy.sources.youtube.youtube import fetch_metadata
 
 
 def after_song_finished(ctx: Context, error=None):
@@ -30,8 +30,7 @@ def after_song_finished(ctx: Context, error=None):
         return
 
     asyncio.create_task(play_song(ctx))
-
-    asyncio.create_task(cache_next_songs(playlist, Database(ctx.db.path)))
+    asyncio.create_task(cache_next_songs(playlist, ctx.db))
 
     guild_ids = [v.guild.id for v in ctx.bot.voice_clients]
 
@@ -115,7 +114,7 @@ class Playback(commands.Cog):
         for url in url_or_urls.split():
             url = url.split("&")[0]
             ctx.playlist.prepend_song(url)
-            meta = await fetch_metadata_async(url_or_urls)
+            meta = await fetch_metadata(url_or_urls)
             await cache_song_async(
                 meta,
                 Path(ctx.playlist.data_dir) / meta["id"],
@@ -135,7 +134,7 @@ class Playback(commands.Cog):
         for url in urls.split():
             url = url.split("&")[0]
             ctx.playlist.append_song(url)
-            meta = await fetch_metadata_async(url)
+            meta = await fetch_metadata(url)
             ctx.db.write_metadata(meta)
 
     @commands.command(name="stop", aliases=["leave", "end", "quit"])
@@ -224,7 +223,7 @@ class Playback(commands.Cog):
 
         await ctx.send(embed=em)
 
-    @commands.command(name="np", aliases=["now", "playing"])
+    @commands.command(name="np", aliases=["now", "playing", "progress", "prog"])
     async def now_playing(self, ctx: Context):
         """Displays the currently playing song"""
         if ctx.voice_client is None:

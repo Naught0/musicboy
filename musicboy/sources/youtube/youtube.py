@@ -11,12 +11,14 @@ class SongMetadata(TypedDict):
     url: str
 
 
-def fetch_metadata(url: str) -> SongMetadata:
+def _fetch_metadata(url: str) -> SongMetadata:
     """Get metadata from YouTube URL."""
     with yt_dlp.YoutubeDL(params={"quiet": True}) as ydl:
         meta = ydl.extract_info(url, download=False, process=False)
         if meta is None:
             raise ValueError("Could not get metadata from YouTube URL")
+
+        print(meta)
 
         return SongMetadata(
             id=meta["id"],
@@ -26,7 +28,7 @@ def fetch_metadata(url: str) -> SongMetadata:
         )
 
 
-fetch_metadata_async = asyncify(fetch_metadata)
+fetch_metadata = asyncify(_fetch_metadata)
 
 
 def download_audio(url: str, filename: str) -> str:
@@ -46,6 +48,3 @@ def download_audio(url: str, filename: str) -> str:
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([url])
     return filename
-
-
-download_audio_async = asyncify(download_audio)
