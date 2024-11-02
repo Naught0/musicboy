@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import json
 import random
 from functools import wraps
 from pathlib import Path
 from typing import TypedDict
+import typing
 
 from asyncer import asyncify
 
-from musicboy.database import Database
 from musicboy.sources.youtube.youtube import SongMetadata, download_audio
 
 
@@ -26,6 +25,10 @@ def cache_song(song: SongMetadata, path: Path):
 
 
 cache_song_async = asyncify(cache_song)
+
+
+if typing.TYPE_CHECKING:
+    from musicboy.database import Database
 
 
 def _cache_next_songs(playlist: Playlist, db: Database):
