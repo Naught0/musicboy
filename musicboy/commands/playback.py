@@ -18,6 +18,8 @@ def after_song_finished(ctx: Context, error=None):
     if ctx.voice_client is None or not ctx.voice_client.is_connected():
         return
 
+    ctx.update_last_active()
+
     playlist = ctx.playlist
     if playlist is None:
         return
