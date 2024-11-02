@@ -93,6 +93,11 @@ class Playback(commands.Cog):
             if ctx.voice_client.is_paused():
                 ctx.progress.start()
                 return ctx.voice_client.resume()
+        else:
+            try:
+                await ctx.author.voice.channel.connect()
+            except Exception:
+                return await ctx.message.add_reaction("❌")
 
         if ctx.playlist is None:
             return
@@ -101,12 +106,6 @@ class Playback(commands.Cog):
             if len(ctx.playlist.playlist) == 0:
                 await ctx.message.add_reaction("❌")
                 return
-
-        if ctx.voice_client is None:
-            try:
-                await ctx.author.voice.channel.connect()
-            except Exception:
-                return await ctx.message.add_reaction("❌")
 
         if url_or_urls is None:
             return await play_song(ctx)
