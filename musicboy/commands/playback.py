@@ -1,9 +1,11 @@
+import os
 from pathlib import Path
 
 import discord
 from discord.ext import commands
 
 from musicboy.bot import Context
+from musicboy.constants import DEFAULT_DATA_DIR
 from musicboy.playlist import (
     PlaylistExhausted,
     cache_next_songs,
@@ -47,7 +49,7 @@ def make_source(path: str, volume: float = 0.05):
     return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(path), volume=volume)
 
 
-async def play_song(ctx: Context):
+async def play_song(ctx: Context, data_dir=DEFAULT_DATA_DIR):
     if ctx.voice_client is None or not ctx.voice_client.is_connected():
         return
 
@@ -61,7 +63,7 @@ async def play_song(ctx: Context):
     song = ctx.db.get_metadata(playlist.current)
     path = get_song_path(song["id"])
     if path is None:
-        await cache_song_async(song, Path(playlist.data_dir) / song["id"])
+        await cache_song_async(song, Path(data_dir) / song["id"])
         path = get_song_path(song["id"])
 
     if path is None:
@@ -86,6 +88,10 @@ async def play_song(ctx: Context):
 
 
 class Playback(commands.Cog):
+    def __init__(self, *args, data_dir=DEFAULT_DATA_DIR, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.data_dir = data_dir
+
     @commands.command(name="play", aliases=["p", "prepend"])
     async def play(self, ctx: Context, *, url_or_urls: str | None):
         """Play, resume, or queue a song next"""
@@ -117,7 +123,7 @@ class Playback(commands.Cog):
             ctx.playlist.prepend_song(url)
             await cache_song_async(
                 meta,
-                Path(ctx.playlist.data_dir) / meta["id"],
+                Path(self.data_dir) / meta["id"],
             )
 
         if ctx.voice_client.is_playing():
@@ -348,4 +354,4 @@ class Playback(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(Playback(bot))
+    await bot.add_cog(Playback(bot, data_dir=os.getenv("DATA_DIR", DEFAULT_DATA_DIR)))

@@ -137,4 +137,4 @@ class MusicBoy(commands.Bot):
             await find_missing_metadata(pl, self.db)
             await cache_next_songs(pl, self.db)
 
-        self.prune_voice_clients.start()
+        self.prune_voice_clients.start(, self.db)

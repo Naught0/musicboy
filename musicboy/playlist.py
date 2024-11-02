@@ -8,10 +8,11 @@ import typing
 
 from asyncer import asyncify
 
+from musicboy.constants import DEFAULT_DATA_DIR
 from musicboy.sources.youtube.youtube import SongMetadata, download_audio
 
 
-def get_song_path(song_id: str, base_dir: str = "musicboy/data") -> Path | None:
+def get_song_path(song_id: str, base_dir: str = DEFAULT_DATA_DIR) -> Path | None:
     try:
         path = next(Path(base_dir).glob(f"{song_id}.*"))
     except StopIteration:
@@ -31,14 +32,14 @@ if typing.TYPE_CHECKING:
     from musicboy.database import Database
 
 
-def _cache_next_songs(playlist: Playlist, db: Database):
+def _cache_next_songs(playlist: Playlist, db: Database, data_dir=DEFAULT_DATA_DIR):
     for url in playlist.playlist[playlist.idx + 1 : playlist.idx + 4]:
         meta = db.get_metadata(url)
         if meta is None:
             continue
 
         if get_song_path(meta["id"]) is None:
-            download_audio(meta["url"], str(Path(playlist.data_dir) / meta["id"]))
+            download_audio(meta["url"], str(Path(data_dir) / meta["id"]))
 
 
 cache_next_songs = asyncify(_cache_next_songs)
@@ -67,14 +68,12 @@ class PlaylistState(TypedDict):
 
 class Playlist:
     playlist: list[str]
-    data_dir: str
     idx: int
 
     def __init__(
         self,
         guild_id: int,
         db: Database,
-        data_dir: str = "musicboy/data",
         playlist: list[str] = [],
         idx: int = 0,
         loop=False,
@@ -82,13 +81,10 @@ class Playlist:
     ):
         self.db = db
         self.idx = idx
-        self.data_dir = data_dir
         self.playlist = playlist
         self.loop = loop
         self.guild_id = guild_id
         self._volume = volume
-
-        self.state_path = Path(data_dir) / f"state_{guild_id}.json"
 
     def init_state(self):
         self._load_state(self.db.get_state(self.guild_id))
