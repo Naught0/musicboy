@@ -50,7 +50,7 @@ class Database:
 
     def write_playlist(self, guild_id: int, playlist: list[str]):
         cursor = self.connection.cursor()
-        cursor.execute("DELETE FROM playlist WHERE guild_id = ?;")
+        cursor.execute("DELETE FROM playlist WHERE guild_id = ?;", (guild_id,))
         cursor.executemany(
             "INSERT INTO playlist(guild_id, url, idx) VALUES (?, ?, ?);",
             [(guild_id, url, idx) for idx, url in enumerate(playlist)],
