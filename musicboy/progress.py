@@ -6,8 +6,8 @@ def seconds_to_duration(seconds: int):
     minutes = (seconds % 3600) // 60
     secs = seconds % 60
 
-    hours_str = f"{hours}:" if hours > 0 else ""
-    return f"{hours_str:02.0f}{minutes:02.0f}:{secs:02.0f}"
+    hours_str = f"{hours:02.0f}:" if hours > 0 else ""
+    return f"{hours_str}{minutes:02.0f}:{secs:02.0f}"
 
 
 class ProgressTracker:
