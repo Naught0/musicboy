@@ -16,10 +16,14 @@ class Database:
 
     def initialize_db(self):
         cursor = self.connection.cursor()
-        cursor.execute(
-            "CREATE TABLE IF NOT EXISTS metadata (url TEXT PRIMARY KEY, id TEXT, title TEXT, duration INTEGER);"
-            "CREATE TABLE IF NOT EXISTS state (guild_id INTEGER PRIMARY KEY, playlist TEXT, idx INTEGER, volume INTEGER);"
-        )
+        stmts = [
+            "CREATE TABLE IF NOT EXISTS metadata (url TEXT PRIMARY KEY, id TEXT, title TEXT, duration INTEGER);",
+            "CREATE TABLE IF NOT EXISTS state (guild_id INTEGER PRIMARY KEY, playlist TEXT, idx INTEGER, volume INTEGER);",
+        ]
+
+        for stmt in stmts:
+            cursor.execute(stmt)
+
         self.connection.commit()
 
     def get_state(self, guild_id: int) -> PlaylistState:
