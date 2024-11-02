@@ -148,6 +148,7 @@ class Playlist:
         np, *rest = self.playlist
         random.shuffle(rest)
         self.playlist = [np, *rest]
+        self.db.write_playlist(self.guild_id, self.playlist)
 
     @write_state_after
     def move_song(self, song_position: int, new_pos: int):
@@ -160,14 +161,17 @@ class Playlist:
             raise ValueError("Position out of range")
 
         self.playlist.insert(new_idx, self.playlist.pop(song_position))
+        self.db.write_playlist(self.guild_id, self.playlist)
 
     @write_state_after
     def prepend_song(self, url: str):
         self.playlist.insert(0 if len(self.playlist) == 0 else self.idx + 1, url)
+        self.db.write_playlist(self.guild_id, self.playlist)
 
     @write_state_after
     def append_song(self, url: str):
         self.playlist.append(url)
+        self.db.write_playlist(self.guild_id, self.playlist)
 
     @write_state_after
     def goto(self, idx: int):
@@ -202,10 +206,12 @@ class Playlist:
     def clear(self):
         self.playlist = []
         self.idx = 0
+        self.db.write_playlist(self.guild_id, self.playlist)
 
     @write_state_after
     def remove_index(self, idx: int):
         self.playlist.pop(self.idx + idx - 1)
+        self.db.write_playlist(self.guild_id, self.playlist)
 
     @write_state_after
     def remove_song(self, url: str, all=False):
@@ -213,3 +219,5 @@ class Playlist:
             self.playlist = [u for u in self.playlist if u != url]
         else:
             self.playlist.remove(url)
+
+        self.db.write_playlist(self.guild_id, self.playlist)

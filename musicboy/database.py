@@ -19,6 +19,7 @@ class Database:
         stmts = [
             "CREATE TABLE IF NOT EXISTS metadata (url TEXT PRIMARY KEY, id TEXT, title TEXT, duration INTEGER);",
             "CREATE TABLE IF NOT EXISTS state (guild_id INTEGER PRIMARY KEY, playlist TEXT, idx INTEGER, volume INTEGER);",
+            "CREATE TABLE IF NOT EXISTS playlist (id INTEGER PRIMARY KEY, guild_id INTEGER, url TEXT, idx INTEGER);",
         ]
 
         for stmt in stmts:
@@ -38,15 +39,30 @@ class Database:
     def write_state(self, state: PlaylistState):
         cursor = self.connection.cursor()
         cursor.execute(
-            "REPLACE INTO state(guild_id, playlist, idx, volume) VALUES (?, ?, ?, ?)",
+            "REPLACE INTO state(guild_id, idx, volume) VALUES (?, ?, ?)",
             (
                 state["guild_id"],
-                state["playlist"],
                 state["idx"],
                 state["volume"],
             ),
         )
         self.connection.commit()
+
+    def write_playlist(self, guild_id: int, playlist: list[str]):
+        cursor = self.connection.cursor()
+        cursor.execute("DELETE FROM playlist WHERE guild_id = ?;")
+        cursor.executemany(
+            "INSERT INTO playlist(guild_id, url, idx) VALUES (?, ?, ?);",
+            [(guild_id, url, idx) for idx, url in enumerate(playlist)],
+        )
+        self.connection.commit()
+
+    def get_playlist(self, guild_id: int) -> list[str]:
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT url FROM playlist WHERE guild_id = ? ORDER BY idx ASC", (guild_id,)
+        )
+        return [row[0] for row in cursor.fetchall()]
 
     def get_metadata(self, url: str) -> SongMetadata:
         cursor = self.connection.cursor()
