@@ -86,16 +86,9 @@ class Playlist:
         self._volume = volume
 
         self.state_path = Path(data_dir) / f"state_{guild_id}.json"
-        try:
-            with self.state_path.open() as f:
-                self._load_state(json.load(f))
-        except FileNotFoundError:
-            with open(self.state_path, "w") as f:
-                json.dump(self.state, f)
-        except json.JSONDecodeError:
-            pass
-        else:
-            print("Loaded state from ", self.state_path)
+
+    def init_state(self):
+        self._load_state(self.db.get_state(self.guild_id))
 
     @property
     def volume(self):
