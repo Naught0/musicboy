@@ -123,7 +123,7 @@ class MusicBoy(commands.Bot):
         for playlist in self.data_dir.glob("state_*.json"):
             with playlist.open() as f:
                 state: PlaylistState = json.load(f)
-                self.playlists[state["guild_id"]] = Playlist.from_state(state)
+                self.playlists[state["guild_id"]] = Playlist.from_state(state, self.db)
 
     async def setup_hook(self) -> None:
         self.db.initialize_db()
