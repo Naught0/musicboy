@@ -4,7 +4,7 @@ from pathlib import Path
 import discord
 from discord.ext import commands
 
-from musicboy.bot import Context
+from musicboy.bot import Context, MusicBoy
 from musicboy.constants import DEFAULT_DATA_DIR
 from musicboy.playlist import (
     PlaylistExhausted,
@@ -88,8 +88,7 @@ async def play_song(ctx: Context, data_dir=DEFAULT_DATA_DIR):
 
 
 class Playback(commands.Cog):
-    def __init__(self, *args, data_dir=DEFAULT_DATA_DIR, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, bot: MusicBoy, data_dir=DEFAULT_DATA_DIR):
         self.data_dir = data_dir
 
     @commands.command(name="play", aliases=["p", "prepend"])
