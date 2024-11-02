@@ -53,7 +53,7 @@ class Context(commands.Context):
 
         pl = self.bot.playlists.get(self.guild.id)
         if pl is None:
-            pl = Playlist(self.guild.id)
+            pl = Playlist(self.guild.id, self.db)
             self.bot.playlists[self.guild.id] = pl
 
         return pl

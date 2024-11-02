@@ -45,8 +45,7 @@ def write_state_after(func):
     @wraps(func)
     def wrapper(self: Playlist, *args, **kwargs):
         result = func(self, *args, **kwargs)
-        with self.state_path.open("w") as f:
-            json.dump(self.state, f)
+        self._write_state()
         return result
 
     return wrapper
@@ -71,12 +70,14 @@ class Playlist:
     def __init__(
         self,
         guild_id: int,
+        db: Database,
         data_dir: str = "musicboy/data",
         playlist: list[str] = [],
         idx: int = 0,
         loop=False,
         volume=0.05,
     ):
+        self.db = db
         self.idx = idx
         self.data_dir = data_dir
         self.playlist = playlist
@@ -109,22 +110,22 @@ class Playlist:
         self.playlist = state["playlist"]
         self.idx = state["idx"]
         self.guild_id = state["guild_id"]
-        self.volume = state["volume"]
+        self.volume = state["volume"] if state["volume"] >= 1 else state["volume"] / 100
 
     @classmethod
-    def from_state(cls: type[Playlist], state: PlaylistState):
+    def from_state(cls: type[Playlist], state: PlaylistState, db: Database):
         self = cls(
             state["guild_id"],
             playlist=state["playlist"],
             idx=state["idx"],
             volume=state["volume"],
+            db=db,
         )
 
         return self
 
     def _write_state(self):
-        with self.state_path.open("w") as f:
-            json.dump(self.state, f)
+        self.db.write_state({**self.state, "volume": self.volume * 100})
 
     @property
     def has_next_song(self):

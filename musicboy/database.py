@@ -1,6 +1,11 @@
 import sqlite3
 
+from musicboy.playlist import PlaylistState
 from musicboy.sources.youtube.youtube import SongMetadata
+
+
+class NotFound(Exception):
+    pass
 
 
 class Database:
@@ -12,7 +17,30 @@ class Database:
     def initialize_db(self):
         cursor = self.connection.cursor()
         cursor.execute(
-            "CREATE TABLE IF NOT EXISTS metadata (url TEXT PRIMARY KEY, id TEXT, title TEXT, duration INTEGER)"
+            "CREATE TABLE IF NOT EXISTS metadata (url TEXT PRIMARY KEY, id TEXT, title TEXT, duration INTEGER);"
+            "CREATE TABLE IF NOT EXISTS state (guild_id INTEGER PRIMARY KEY, playlist TEXT, idx INTEGER, volume INTEGER);"
+        )
+        self.connection.commit()
+
+    def get_state(self, guild_id: int) -> PlaylistState:
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT * FROM state WHERE guild_id = ?", (guild_id,))
+        res = cursor.fetchone()
+        if res is None:
+            raise NotFound(f"Could not find state for {guild_id}")
+
+        return PlaylistState(**res)
+
+    def write_state(self, state: PlaylistState):
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "REPLACE INTO state(guild_id, playlist, idx, volume) VALUES (?, ?, ?, ?)",
+            (
+                state["guild_id"],
+                state["playlist"],
+                state["idx"],
+                state["volume"],
+            ),
         )
         self.connection.commit()
 
@@ -23,7 +51,7 @@ class Database:
         )
         res = cursor.fetchone()
         if res is None:
-            raise ValueError(f"Could not find metadata for {url}")
+            raise NotFound(f"Could not find metadata for {url}")
 
         return SongMetadata(**res)
 
