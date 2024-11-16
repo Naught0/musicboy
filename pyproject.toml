@@ -1,24 +1,13 @@
-[tool.poetry]
+[project]
 name = "musicboy"
 version = "0.1.0"
-description = ""
-authors = ["James E <4589250+Naught0@users.noreply.github.com>"]
+description = "Add your description here"
 readme = "README.md"
-
-[tool.poetry.dependencies]
-python = ">3.12.5 || <3.12.5"
-discord-py = {extras = ["voice"], version = "^2.4.0"}
-yt-dlp = "^2024.10.22"
-python-dotenv = "^1.0.1"
-asyncer = "^0.0.8"
-typing-extensions = "^4.12.2"
-
-
-[tool.poetry.group.dev.dependencies]
-black = "^24.10.0"
-isort = "^5.13.2"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
+requires-python = ">=3.12"
+dependencies = [
+    "asyncer>=0.0.8",
+    "discord-py[voice]>=2.4.0",
+    "python-dotenv>=1.0.1",
+    "typing-extensions>=4.12.2",
+    "yt-dlp>=2024.11.4",
+]
