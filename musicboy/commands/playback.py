@@ -61,16 +61,16 @@ async def play_song(ctx: Context, data_dir=DEFAULT_DATA_DIR):
         raise ValueError("Bot must be in a guild (not DM or group DM)")
 
     song = ctx.db.get_metadata(playlist.current)
-    path = get_song_path(song["id"])
+    path = get_song_path(song["video_id"])
     if path is None:
-        await cache_song_async(song, Path(data_dir) / song["id"])
-        path = get_song_path(song["id"])
+        await cache_song_async(song, Path(data_dir) / song["video_id"])
+        path = get_song_path(song["video_id"])
 
     if path is None:
         raise ValueError("Can't play song. Audio not downloaded")
 
     if ctx.voice_client.is_playing():
-        ctx.voice_client.source = source_from_id(song["id"])
+        ctx.voice_client.source = source_from_id(song["video_id"])
         ctx.voice_client.source.volume = ctx.playlist.volume
     else:
         ctx.voice_client.play(
@@ -142,12 +142,14 @@ class Playback(commands.Cog):
         for url in urls.split():
             url = url.split("&")[0]
             try:
-                meta = await fetch_metadata(url)
+                meta = ctx.db.get_metadata(url)
+                if meta is None:
+                    meta = await fetch_metadata(url)
+                    ctx.db.write_metadata(meta)
             except Exception:
                 fail = True
                 continue
 
-            ctx.db.write_metadata(meta)
             ctx.playlist.append_song(url)
 
         if fail:

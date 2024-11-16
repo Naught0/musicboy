@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import random
+import typing
 from functools import wraps
 from pathlib import Path
 from typing import TypedDict
-import typing
 
 from asyncer import asyncify
 
 from musicboy.constants import DEFAULT_DATA_DIR
-from musicboy.sources.youtube.youtube import SongMetadata, download_audio
+from musicboy.sources.youtube.youtube import (
+    SongMetadata,
+    download_audio,
+    fetch_metadata,
+)
 
 
 def get_song_path(song_id: str, base_dir: str = DEFAULT_DATA_DIR) -> Path | None:
@@ -32,24 +36,21 @@ if typing.TYPE_CHECKING:
     from musicboy.database import Database
 
 
-def _cache_next_songs(playlist: Playlist, db: Database, data_dir=DEFAULT_DATA_DIR):
+async def cache_next_songs(playlist: Playlist, db: Database, data_dir=DEFAULT_DATA_DIR):
     for url in playlist.playlist[playlist.idx + 1 : playlist.idx + 4]:
-        meta = db.get_metadata(url)
+        meta = await asyncify(db.get_metadata)(url=url)
         if meta is None:
-            continue
+            meta = await fetch_metadata(url)
 
-        if get_song_path(meta["id"]) is None:
-            download_audio(meta["url"], str(Path(data_dir) / meta["id"]))
-
-
-cache_next_songs = asyncify(_cache_next_songs)
+        if get_song_path(meta["video_id"]) is None:
+            download_audio(meta["url"], str(Path(data_dir) / meta["video_id"]))
 
 
 def write_state_after(func):
     @wraps(func)
     def wrapper(self: Playlist, *args, **kwargs):
         result = func(self, *args, **kwargs)
-        self._write_state()
+        self.write_state()
         return result
 
     return wrapper
@@ -81,7 +82,7 @@ class Playlist:
     ):
         self.db = db
         self.idx = idx
-        self.playlist = playlist
+        self.playlist = playlist or []
         self.loop = loop
         self.guild_id = guild_id
         self._volume = volume
@@ -116,8 +117,9 @@ class Playlist:
 
         return self
 
-    def _write_state(self):
+    def write_state(self):
         self.db.write_state({**self.state, "volume": self.volume * 100})
+        self.db.write_playlist(self.guild_id, self.playlist)
 
     @property
     def has_next_song(self):
@@ -148,7 +150,6 @@ class Playlist:
         np, *rest = self.playlist
         random.shuffle(rest)
         self.playlist = [np, *rest]
-        self.db.write_playlist(self.guild_id, self.playlist)
 
     @write_state_after
     def move_song(self, song_position: int, new_pos: int):
@@ -161,17 +162,14 @@ class Playlist:
             raise ValueError("Position out of range")
 
         self.playlist.insert(new_idx, self.playlist.pop(song_position))
-        self.db.write_playlist(self.guild_id, self.playlist)
 
     @write_state_after
     def prepend_song(self, url: str):
         self.playlist.insert(0 if len(self.playlist) == 0 else self.idx + 1, url)
-        self.db.write_playlist(self.guild_id, self.playlist)
 
     @write_state_after
     def append_song(self, url: str):
         self.playlist.append(url)
-        self.db.write_playlist(self.guild_id, self.playlist)
 
     @write_state_after
     def goto(self, idx: int):

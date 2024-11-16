@@ -1,11 +1,12 @@
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 import yt_dlp
 from asyncer import asyncify
 
 
 class SongMetadata(TypedDict):
-    id: str
+    id: NotRequired[int]
+    video_id: str
     title: str
     duration: int
     url: str
@@ -19,7 +20,7 @@ def _fetch_metadata(url: str) -> SongMetadata:
             raise ValueError("Could not get metadata from YouTube URL")
 
         return SongMetadata(
-            id=meta["id"],
+            video_id=meta["id"],
             title=meta["title"],
             duration=meta["duration"],
             url=url,
@@ -31,6 +32,7 @@ fetch_metadata = asyncify(_fetch_metadata)
 
 def download_audio(url: str, filename: str) -> str:
     """Download best audio from YouTube URL to specified filename."""
+    print(f"Downloading audio for {url} to {filename}")
     opts = {
         "format": "m4a/bestaudio/best",
         "outtmpl": filename,

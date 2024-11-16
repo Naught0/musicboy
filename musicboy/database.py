@@ -17,7 +17,7 @@ class Database:
     def initialize_db(self):
         cursor = self.connection.cursor()
         stmts = [
-            "CREATE TABLE IF NOT EXISTS metadata (url TEXT PRIMARY KEY, id TEXT, title TEXT, duration INTEGER);",
+            "CREATE TABLE IF NOT EXISTS metadata (id INTEGER PRIMARY KEY, url TEXT UNIQUE, video_id TEXT, title TEXT, duration INTEGER);",
             "CREATE TABLE IF NOT EXISTS state (guild_id INTEGER PRIMARY KEY, playlist TEXT, idx INTEGER, volume INTEGER);",
             "CREATE TABLE IF NOT EXISTS playlist (id INTEGER PRIMARY KEY, guild_id INTEGER, url TEXT, idx INTEGER);",
         ]
@@ -26,6 +26,11 @@ class Database:
             cursor.execute(stmt)
 
         self.connection.commit()
+
+    def get_all_state(self):
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT * FROM state;")
+        return (PlaylistState(**s) for s in cursor.fetchall())
 
     def get_state(self, guild_id: int) -> PlaylistState:
         cursor = self.connection.cursor()
@@ -40,11 +45,7 @@ class Database:
         cursor = self.connection.cursor()
         cursor.execute(
             "REPLACE INTO state(guild_id, idx, volume) VALUES (?, ?, ?)",
-            (
-                state["guild_id"],
-                state["idx"],
-                state["volume"],
-            ),
+            (state["guild_id"], state["idx"], state["volume"]),
         )
         self.connection.commit()
 
@@ -68,7 +69,7 @@ class Database:
     def get_metadata(self, url: str) -> SongMetadata:
         cursor = self.connection.cursor()
         cursor.execute(
-            "SELECT id, url, title, duration FROM metadata WHERE url = ?", (url,)
+            "SELECT video_id, url, title, duration FROM metadata WHERE url = ?", (url,)
         )
         res = cursor.fetchone()
         if res is None:
@@ -79,10 +80,10 @@ class Database:
     def write_metadata(self, metadata: SongMetadata):
         cursor = self.connection.cursor()
         cursor.execute(
-            "REPLACE INTO metadata(url, id, title, duration) VALUES (?, ?, ?, ?)",
+            "REPLACE INTO metadata(url, video_id, title, duration) VALUES (?, ?, ?, ?)",
             (
                 metadata["url"],
-                metadata["id"],
+                metadata["video_id"],
                 metadata["title"],
                 metadata["duration"],
             ),

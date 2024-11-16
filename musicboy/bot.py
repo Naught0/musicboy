@@ -116,14 +116,13 @@ class MusicBoy(commands.Bot):
     def voice_clients(self):  # type: ignore
         return cast(Sequence[VoiceClient], self._connection.voice_clients)
 
-    async def get_context(self, message, *, cls=Context):
+    async def get_context(self, message, *, cls=Context):  # type: ignore
         return await super().get_context(message, cls=cls)
 
-    def load_playlists(self):
-        for playlist in self.data_dir.glob("state_*.json"):
-            with playlist.open() as f:
-                state: PlaylistState = json.load(f)
-                self.playlists[state["guild_id"]] = Playlist.from_state(state, self.db)
+    async def init_state_from_db(self):
+        playlists = self.db.get_all_state()
+        for state in playlists:
+            self.playlists[state["guild_id"]] = Playlist.from_state(state, self.db)
 
     async def setup_hook(self) -> None:
         self.db.initialize_db()
@@ -131,7 +130,7 @@ class MusicBoy(commands.Bot):
         for cmd in self.enabled_extensions:
             await self.load_extension(f"musicboy.commands.{cmd}")
 
-        self.load_playlists()
+        await self.init_state_from_db()
 
         for pl in self.playlists.values():
             await find_missing_metadata(pl, self.db)
