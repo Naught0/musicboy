@@ -11,8 +11,8 @@ from asyncer import asyncify
 from musicboy.constants import DEFAULT_DATA_DIR
 from musicboy.sources.youtube.youtube import (
     SongMetadata,
-    download_audio,
     fetch_metadata,
+    spawn_audio_download,
 )
 
 
@@ -26,7 +26,7 @@ def get_song_path(song_id: str, base_dir: str = DEFAULT_DATA_DIR) -> Path | None
 
 
 def cache_song(song: SongMetadata, path: Path):
-    return download_audio(song["url"], str(path))
+    return spawn_audio_download(song["url"], str(path))
 
 
 cache_song_async = asyncify(cache_song)
@@ -43,7 +43,7 @@ async def cache_next_songs(playlist: Playlist, db: Database, data_dir=DEFAULT_DA
             meta = await fetch_metadata(url)
 
         if get_song_path(meta["video_id"]) is None:
-            download_audio(meta["url"], str(Path(data_dir) / meta["video_id"]))
+            await cache_song_async(meta, Path(data_dir) / meta["video_id"])
 
 
 def write_state_after(func):

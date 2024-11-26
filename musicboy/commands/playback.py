@@ -1,3 +1,4 @@
+import asyncio
 import os
 from pathlib import Path
 
@@ -60,6 +61,19 @@ async def get_or_fetch_metadata(db: Database, url: str) -> SongMetadata:
     return meta
 
 
+async def wait_for_download(video_id: str, seconds=15):
+    count = 0
+    while True:
+        print("Waiting for download for song", video_id, "seconds", count)
+        if count >= seconds:
+            return
+
+        await asyncio.sleep(1)
+        if path := get_song_path(video_id) is not None:
+            return path
+        count += 1
+
+
 async def play_song(ctx: Context, data_dir=DEFAULT_DATA_DIR):
     if ctx.voice_client is None or not ctx.voice_client.is_connected():
         return
@@ -75,7 +89,7 @@ async def play_song(ctx: Context, data_dir=DEFAULT_DATA_DIR):
     path = get_song_path(song["video_id"])
     if path is None:
         await cache_song_async(song, Path(data_dir) / song["video_id"])
-        path = get_song_path(song["video_id"])
+        path = await wait_for_download(song["video_id"])
 
     if path is None:
         raise ValueError("Can't play song. Audio not downloaded")
@@ -129,6 +143,7 @@ class Playback(commands.Cog):
         for url in url_or_urls.split():
             url = url.split("&")[0]
             meta = await get_or_fetch_metadata(ctx.db, url)
+            print(meta)
             ctx.db.write_metadata(meta)
             ctx.playlist.prepend_song(url)
             await cache_song_async(

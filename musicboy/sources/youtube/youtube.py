@@ -1,3 +1,4 @@
+import subprocess
 from typing import NotRequired, TypedDict
 
 import yt_dlp
@@ -29,6 +30,12 @@ def _fetch_metadata(url: str) -> SongMetadata:
 
 
 fetch_metadata = asyncify(_fetch_metadata)
+
+
+def spawn_audio_download(url: str, filename: str):
+    subprocess.Popen(
+        ["python3", "musicboy/sources/youtube/download_song.py", url, filename],
+    )
 
 
 def download_audio(url: str, filename: str) -> str:
