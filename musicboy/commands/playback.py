@@ -64,9 +64,8 @@ async def get_or_fetch_metadata(db: Database, url: str) -> SongMetadata:
 async def wait_for_download(video_id: str, seconds=15):
     count = 0
     while True:
-        print("Waiting for download for song", video_id, "seconds", count)
         if count >= seconds:
-            return
+            raise TimeoutError("Timed out waiting for download for video ID:", video_id)
 
         await asyncio.sleep(1)
         if path := get_song_path(video_id) is not None:
@@ -87,17 +86,14 @@ async def play_song(ctx: Context, data_dir=DEFAULT_DATA_DIR):
 
     song = ctx.db.get_metadata(playlist.current)
     path = get_song_path(song["video_id"])
-    if path is None:
-        await cache_song_async(song, Path(data_dir) / song["video_id"])
-        path = await wait_for_download(song["video_id"])
-
-    if path is None:
-        raise ValueError("Can't play song. Audio not downloaded")
 
     if ctx.voice_client.is_playing():
         ctx.voice_client.source = source_from_id(song["video_id"])
         ctx.voice_client.source.volume = ctx.playlist.volume
     else:
+        if path is None:
+            path = await wait_for_download(song["video_id"])
+
         ctx.voice_client.play(
             make_source(str(path), ctx.playlist.volume),
             after=lambda error: after_song_finished(ctx, error),
