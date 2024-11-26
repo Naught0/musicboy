@@ -17,9 +17,9 @@ class Database:
     def initialize_db(self):
         cursor = self.connection.cursor()
         stmts = [
-            "CREATE TABLE IF NOT EXISTS metadata (id INTEGER PRIMARY KEY, url TEXT UNIQUE, video_id TEXT, title TEXT, duration INTEGER);",
+            "CREATE TABLE IF NOT EXISTS metadata (id INTEGER PRIMARY KEY, url TEXT UNIQUE NOT NULL, video_id TEXT NOT NULL, title TEXT NOT NULL, duration INTEGER NOT NULL);",
             "CREATE TABLE IF NOT EXISTS state (guild_id INTEGER PRIMARY KEY, idx INTEGER, volume INTEGER);",
-            "CREATE TABLE IF NOT EXISTS playlist (id INTEGER PRIMARY KEY, guild_id INTEGER, url TEXT, idx INTEGER);",
+            "CREATE TABLE IF NOT EXISTS playlist (id INTEGER PRIMARY KEY, guild_id INTEGER NOT NULL, url TEXT NOT NULL, idx INTEGER);",
         ]
 
         for stmt in stmts:
