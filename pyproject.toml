@@ -3,10 +3,9 @@ name = "musicboy"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "asyncer>=0.0.8",
-    "audioop-lts>=0.2.1",
     "discord-py[voice]>=2.4.0",
     "python-dotenv>=1.0.1",
     "typing-extensions>=4.12.2",
