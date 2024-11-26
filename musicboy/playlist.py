@@ -4,7 +4,7 @@ import random
 import typing
 from functools import wraps
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from asyncer import asyncify
 
@@ -62,7 +62,7 @@ class PlaylistExhausted(Exception):
 
 class PlaylistState(TypedDict):
     guild_id: int
-    playlist: list[str]
+    playlist: NotRequired[list[str]]
     idx: int
     volume: float
 
@@ -100,16 +100,16 @@ class Playlist:
         self._volume = value
 
     def _load_state(self, state: PlaylistState):
-        self.playlist = state["playlist"]
+        self.playlist = state.get("playlist", [])
         self.idx = state["idx"]
         self.guild_id = state["guild_id"]
-        self.volume = state["volume"] if state["volume"] >= 1 else state["volume"] / 100
+        self.volume = state["volume"] if state["volume"] >= 1 else state["volume"] * 100
 
     @classmethod
     def from_state(cls: type[Playlist], state: PlaylistState, db: Database):
         self = cls(
             state["guild_id"],
-            playlist=state["playlist"],
+            playlist=state.get("playlist", []),
             idx=state["idx"],
             volume=state["volume"],
             db=db,
@@ -118,7 +118,7 @@ class Playlist:
         return self
 
     def write_state(self):
-        self.db.write_state({**self.state, "volume": self.volume * 100})
+        self.db.write_state({**self.state, "volume": self.volume})
         self.db.write_playlist(self.guild_id, self.playlist)
 
     @property
@@ -152,16 +152,16 @@ class Playlist:
         self.playlist = [np, *rest]
 
     @write_state_after
-    def move_song(self, song_position: int, new_pos: int):
-        new_idx = self.idx + new_pos - 1
+    def move_song(self, current_idx: int, new_pos: int):
+        new_idx = new_pos - 1
         if 0 > new_idx > len(self.playlist) - 1:
             raise ValueError("Position out of range")
 
-        song_position = self.idx + song_position - 1
-        if 0 > song_position > len(self.playlist) - 1:
+        current_idx = current_idx - 1
+        if 0 > current_idx > len(self.playlist) - 1:
             raise ValueError("Position out of range")
 
-        self.playlist.insert(new_idx, self.playlist.pop(song_position))
+        self.playlist.insert(new_idx, self.playlist.pop(current_idx))
 
     @write_state_after
     def prepend_song(self, url: str):

@@ -18,7 +18,7 @@ class Database:
         cursor = self.connection.cursor()
         stmts = [
             "CREATE TABLE IF NOT EXISTS metadata (id INTEGER PRIMARY KEY, url TEXT UNIQUE, video_id TEXT, title TEXT, duration INTEGER);",
-            "CREATE TABLE IF NOT EXISTS state (guild_id INTEGER PRIMARY KEY, playlist TEXT, idx INTEGER, volume INTEGER);",
+            "CREATE TABLE IF NOT EXISTS state (guild_id INTEGER PRIMARY KEY, idx INTEGER, volume INTEGER);",
             "CREATE TABLE IF NOT EXISTS playlist (id INTEGER PRIMARY KEY, guild_id INTEGER, url TEXT, idx INTEGER);",
         ]
 
@@ -29,8 +29,21 @@ class Database:
 
     def get_all_state(self):
         cursor = self.connection.cursor()
-        cursor.execute("SELECT * FROM state;")
-        return (PlaylistState(**s) for s in cursor.fetchall())
+        cursor.execute("SELECT guild_id, idx, volume FROM state;")
+        states = cursor.fetchall()
+        cursor.execute("SELECT guild_id, url, idx FROM playlist ORDER BY idx ASC;")
+        songs = cursor.fetchall()
+        return (
+            PlaylistState(
+                **state,
+                playlist=[
+                    song["url"]
+                    for song in songs
+                    if song["guild_id"] == state["guild_id"]
+                ],
+            )
+            for state in states
+        )
 
     def get_state(self, guild_id: int) -> PlaylistState:
         cursor = self.connection.cursor()

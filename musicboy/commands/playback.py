@@ -6,6 +6,7 @@ from discord.ext import commands
 
 from musicboy.bot import Context, MusicBoy
 from musicboy.constants import DEFAULT_DATA_DIR
+from musicboy.database import Database, NotFound
 from musicboy.playlist import (
     PlaylistExhausted,
     cache_next_songs,
@@ -13,7 +14,7 @@ from musicboy.playlist import (
     get_song_path,
 )
 from musicboy.progress import ProgressTracker, seconds_to_duration
-from musicboy.sources.youtube.youtube import fetch_metadata
+from musicboy.sources.youtube.youtube import SongMetadata, fetch_metadata
 
 
 def after_song_finished(ctx: Context, error=None):
@@ -47,6 +48,16 @@ def source_from_id(song_id: str):
 
 def make_source(path: str, volume: float = 0.05):
     return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(path), volume=volume)
+
+
+async def get_or_fetch_metadata(db: Database, url: str) -> SongMetadata:
+    try:
+        meta = db.get_metadata(url)
+    except NotFound:
+        meta = await fetch_metadata(url)
+        db.write_metadata(meta)
+
+    return meta
 
 
 async def play_song(ctx: Context, data_dir=DEFAULT_DATA_DIR):
@@ -117,12 +128,12 @@ class Playback(commands.Cog):
 
         for url in url_or_urls.split():
             url = url.split("&")[0]
-            meta = await fetch_metadata(url_or_urls)
+            meta = await get_or_fetch_metadata(ctx.db, url)
             ctx.db.write_metadata(meta)
             ctx.playlist.prepend_song(url)
             await cache_song_async(
                 meta,
-                Path(self.data_dir) / meta["id"],
+                Path(self.data_dir) / meta["video_id"],
             )
 
         if ctx.voice_client.is_playing():
@@ -141,15 +152,7 @@ class Playback(commands.Cog):
         fail = False
         for url in urls.split():
             url = url.split("&")[0]
-            try:
-                meta = ctx.db.get_metadata(url)
-                if meta is None:
-                    meta = await fetch_metadata(url)
-                    ctx.db.write_metadata(meta)
-            except Exception:
-                fail = True
-                continue
-
+            await get_or_fetch_metadata(ctx.db, url)
             ctx.playlist.append_song(url)
 
         if fail:
@@ -224,22 +227,25 @@ class Playback(commands.Cog):
         next_up = playlist.playlist[playlist.idx + 1 :]
         songs_remaining = len(next_up) + 1
         em.title = f"Playlist ({songs_remaining})"
-        if next_up is not None:
+        if next_up:
             next_songs = []
             for idx, url in enumerate(next_up):
                 song = ctx.db.get_metadata(url)
                 duration = seconds_to_duration(song["duration"])
                 next_songs.append(
-                    f"**{idx+2}.** [{song['title']}]({song['url']}) ({duration})"
+                    f"**{idx+1}.** [{song['title']}]({song['url']}) ({duration})"
                 )
-            description = "\n".join(next_songs)
+            up_next = "\n".join(next_songs)
         else:
-            description = "No more songs in the queue"
+            up_next = "*Nothing*"
 
         meta = ctx.db.get_metadata(playlist.current)
-        description = f"**1.** [{meta['title']}]({meta['url']}) ({seconds_to_duration(meta['duration'])}) {" (Now playing)" if ctx.voice_client and ctx.voice_client.is_playing() else ""}\n{description}"
-
-        em.description = description
+        em.add_field(
+            name="Now playing",
+            value=f"**[{meta['title']}]({meta['url']}) ({seconds_to_duration(meta['duration'])})**",
+            inline=False,
+        )
+        em.add_field(name="Up next", value=up_next)
 
         await ctx.send(embed=em)
 
@@ -324,12 +330,6 @@ class Playback(commands.Cog):
         if ctx.playlist is None:
             return
 
-        if new_position < 2:
-            new_position = 2
-            await ctx.reply(
-                "Position must be greater than 1. Playing song next (position 2)"
-            )
-
         ctx.playlist.move_song(song_position, new_position)
         await ctx.message.add_reaction("✅")
 
@@ -340,16 +340,14 @@ class Playback(commands.Cog):
             return
 
         if volume is None:
-            return await ctx.send(f"Volume: {ctx.playlist.volume * 100:.0f}")
+            return await ctx.send(f"Volume: {ctx.playlist.volume:.0f}")
 
-        if volume < 0 or volume > 100:
-            return await ctx.send("Volume must be between 0 and 100")
+        if volume < 1 or volume > 100:
+            return await ctx.send("Volume must be between 1 and 100")
 
-        vol = volume / 100
-
-        ctx.playlist.volume = vol
+        ctx.playlist.volume = volume
         if ctx.voice_client and ctx.voice_client.source:
-            ctx.voice_client.source.volume = vol
+            ctx.voice_client.source.volume = volume / 100
 
         await ctx.message.add_reaction("✅")
 

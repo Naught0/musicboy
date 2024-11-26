@@ -14,6 +14,7 @@ class SongMetadata(TypedDict):
 
 def _fetch_metadata(url: str) -> SongMetadata:
     """Get metadata from YouTube URL."""
+    print("Fetching metadata for", url)
     with yt_dlp.YoutubeDL(params={"quiet": True}) as ydl:
         meta = ydl.extract_info(url, download=False, process=False)
         if meta is None:

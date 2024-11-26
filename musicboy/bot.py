@@ -120,8 +120,8 @@ class MusicBoy(commands.Bot):
         return await super().get_context(message, cls=cls)
 
     async def init_state_from_db(self):
-        playlists = self.db.get_all_state()
-        for state in playlists:
+        for state in self.db.get_all_state():
+            print("Loading state", state)
             self.playlists[state["guild_id"]] = Playlist.from_state(state, self.db)
 
     async def setup_hook(self) -> None:
