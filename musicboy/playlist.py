@@ -9,11 +9,8 @@ from typing import NotRequired, TypedDict
 from asyncer import asyncify
 
 from musicboy.constants import DEFAULT_DATA_DIR
-from musicboy.sources.youtube.youtube import (
-    SongMetadata,
-    fetch_metadata,
-    spawn_audio_download,
-)
+from musicboy.sources.youtube.youtube import (SongMetadata, fetch_metadata,
+                                              spawn_audio_download)
 
 
 def get_song_path(song_id: str, base_dir: str = DEFAULT_DATA_DIR) -> Path | None:
@@ -118,7 +115,7 @@ class Playlist:
         return self
 
     def write_state(self):
-        self.db.write_state({**self.state, "volume": self.volume})
+        self.db.write_state({**self.state, "volume": self.volume / 100 })
         self.db.write_playlist(self.guild_id, self.playlist)
 
     @property
