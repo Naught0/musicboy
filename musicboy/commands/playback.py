@@ -8,12 +8,8 @@ from discord.ext import commands
 from musicboy.bot import Context, MusicBoy
 from musicboy.constants import DEFAULT_DATA_DIR
 from musicboy.database import Database, NotFound
-from musicboy.playlist import (
-    PlaylistExhausted,
-    cache_next_songs,
-    cache_song_async,
-    get_song_path,
-)
+from musicboy.playlist import (PlaylistExhausted, cache_next_songs,
+                               cache_song_async, get_song_path)
 from musicboy.progress import ProgressTracker, seconds_to_duration
 from musicboy.sources.youtube.youtube import SongMetadata, fetch_metadata
 
@@ -87,6 +83,9 @@ async def play_song(ctx: Context, data_dir=DEFAULT_DATA_DIR):
     song = ctx.db.get_metadata(playlist.current)
     path = get_song_path(song["video_id"])
 
+    if ctx.playlist is None:
+        raise ValueError("Playlist is None somehow")
+
     if ctx.voice_client.is_playing():
         ctx.voice_client.source = source_from_id(song["video_id"])
         ctx.voice_client.source.volume = ctx.playlist.volume
@@ -95,7 +94,7 @@ async def play_song(ctx: Context, data_dir=DEFAULT_DATA_DIR):
             path = await wait_for_download(song["video_id"])
 
         ctx.voice_client.play(
-            make_source(str(path), ctx.playlist.volume),
+            make_source(str(path), ctx.playlist.volume / 100),
             after=lambda error: after_song_finished(ctx, error),
             bitrate=256,
             signal_type="music",
