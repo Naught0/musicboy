@@ -88,7 +88,7 @@ async def play_song(ctx: Context, data_dir=DEFAULT_DATA_DIR):
 
     if ctx.voice_client.is_playing():
         ctx.voice_client.source = source_from_id(song["video_id"])
-        ctx.voice_client.source.volume = ctx.playlist.volume
+        ctx.voice_client.source.volume = ctx.playlist.volume / 100
     else:
         if path is None:
             path = await wait_for_download(song["video_id"])
